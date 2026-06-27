@@ -27,6 +27,30 @@ function inferProvider(rawUrl: string, registrationUrl?: string): string {
   return check(rawUrl) ?? "custom";
 }
 
+// Canonical forms for themes Exa commonly returns in hyphenated or multi-word variants.
+// Only maps clear synonyms — keeps distinct sub-topics (e.g. nlp, computer-vision) intact.
+const THEME_ALIASES: Record<string, string> = {
+  "artificial-intelligence": "ai",
+  "artificial intelligence": "ai",
+  "machine-learning": "ai",
+  "machine learning": "ai",
+  "generative-ai": "ai",
+  "generative ai": "ai",
+  "deep-learning": "ai",
+  "deep learning": "ai",
+  "defi": "web3",
+  "decentralized-finance": "web3",
+  "financial-technology": "fintech",
+  "financial technology": "fintech",
+};
+
+function normalizeThemes(themes: string[]): string[] {
+  return [...new Set(themes.map((t) => {
+    const lower = t.toLowerCase();
+    return THEME_ALIASES[lower] ?? lower;
+  }))];
+}
+
 function parseLocation(raw: string | undefined): {
   mode: "online" | "in_person" | "hybrid";
   city?: string;
@@ -72,7 +96,7 @@ export async function handleNormalize(job: Job<NormalizeListingJob>) {
     locationCountry: location.country,
     startsAt: toDate(fields["startsAt"]),
     registrationClosesAt: toDate(fields["registrationClosesAt"]),
-    themes: (fields["themes"] as string[]) ?? [],
+    themes: normalizeThemes((fields["themes"] as string[]) ?? []),
     eligibility: fields["eligibility"] as string | undefined,
     registrationFormUrl: fields["registrationUrl"] as string | undefined,
     registrationProvider: inferProvider(listing.rawUrl, fields["registrationUrl"] as string | undefined),
