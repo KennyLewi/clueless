@@ -28,6 +28,14 @@ const plannedActions: PlannedAction[] = AUTOFILL_FIELDS.map((f) => ({
 }));
 
 export const mockApi: Api = {
+  async signup(name, email) {
+    await delay(160);
+    return { userId: DEMO_PROFILE.id, name, email };
+  },
+  async login(email) {
+    await delay(160);
+    return { userId: DEMO_PROFILE.id, name: DEMO_PROFILE.name, email };
+  },
   async getFeed() {
     await delay(180);
     return FEED;
@@ -51,6 +59,13 @@ export const mockApi: Api = {
   async getRun(id) {
     await delay(80);
     return { ...makeRun(DEMO_PROFILE.id, EVENTS[0].id), id, status: "filling" };
+  },
+  async getRuns() {
+    await delay(120);
+    return [];
+  },
+  async updatePlan() {
+    await delay(80);
   },
   async approveRun() {
     await delay(120);

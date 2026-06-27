@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
-import { DEMO_USER_ID, feedExtras } from "@/lib/mock-data";
+import { feedExtras } from "@/lib/mock-data";
+import { currentUserId } from "@/lib/session";
 import { isClosingSoon, locationLabel } from "@/lib/format";
 import type { FeedEvent } from "@/lib/types";
 import { EventCard } from "@/components/EventCard";
@@ -22,7 +23,10 @@ export default function FeedPage() {
 
   useEffect(() => {
     let alive = true;
-    api.getFeed(DEMO_USER_ID).then((e) => alive && setEvents(e));
+    api
+      .getFeed(currentUserId())
+      .then((e) => alive && setEvents(e))
+      .catch(() => alive && setEvents([]));
     return () => {
       alive = false;
     };

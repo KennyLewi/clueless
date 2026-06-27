@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { DEMO_PROFILE } from "@/lib/mock-data";
 import { initials } from "@/lib/format";
+import { clearSession, useSession } from "@/lib/session";
 import {
   Bird,
   IconDiscover,
@@ -33,6 +34,16 @@ const NAV: NavDef[] = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { session } = useSession();
+
+  const name = session?.name ?? DEMO_PROFILE.name;
+  const email = session?.email ?? DEMO_PROFILE.email;
+
+  const signOut = () => {
+    clearSession();
+    router.push("/welcome");
+  };
 
   return (
     <div className="shell">
@@ -62,13 +73,21 @@ export function AppShell({ children }: { children: ReactNode }) {
           })}
         </nav>
         <div className="user-chip">
-          <div className="avatar">{initials(DEMO_PROFILE.name)}</div>
+          <div className="avatar">{initials(name)}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13.5, fontWeight: 600 }}>{DEMO_PROFILE.name}</div>
+            <div style={{ fontSize: 13.5, fontWeight: 600 }}>{name}</div>
             <div style={{ fontSize: 12, color: "var(--faint2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {DEMO_PROFILE.email}
+              {email}
             </div>
           </div>
+          <button
+            className="btn-ghost"
+            onClick={signOut}
+            title="Sign out"
+            style={{ fontSize: 12, color: "var(--faint2)", padding: 4 }}
+          >
+            Sign out
+          </button>
         </div>
       </aside>
       <main className="main">{children}</main>

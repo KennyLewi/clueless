@@ -18,13 +18,24 @@ export interface RunStreamHandlers {
   onError?: (message: string) => void;
 }
 
+export interface AuthResult {
+  userId: string;
+  name: string;
+  email: string;
+}
+
 export interface Api {
+  signup(name: string, email: string, password: string): Promise<AuthResult>;
+  login(email: string, password: string): Promise<AuthResult>;
   getFeed(userId: string): Promise<FeedEvent[]>;
   getEvent(id: string): Promise<Hackathon | null>;
   getProfile(id: string): Promise<UserProfile | null>;
   putProfile(profile: UserProfile): Promise<UserProfile>;
   createRegistration(userId: string, hackathonId: string): Promise<RegistrationRun>;
   getRun(id: string): Promise<RegistrationRun | null>;
+  getRuns(userId: string): Promise<RegistrationRun[]>;
+  /** Persist user-edited planned actions before approval (confirm-gate edits). */
+  updatePlan(id: string, plannedActions: PlannedAction[]): Promise<void>;
   approveRun(id: string): Promise<void>;
   cancelRun(id: string): Promise<void>;
   /** Subscribe to a run's SSE stream; returns an unsubscribe fn. */
@@ -47,9 +58,22 @@ const SSE_EVENT_TYPES = [
   "paused",
   "awaiting_approval",
   "screenshot",
+  "status_changed",
 ] as const;
 
 const realApi: Api = {
+  async signup(name, email, password) {
+    return http<AuthResult>(`/auth/signup`, {
+      method: "POST",
+      body: JSON.stringify({ name, email, password }),
+    });
+  },
+  async login(email, password) {
+    return http<AuthResult>(`/auth/login`, {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+  },
   async getFeed(userId) {
     const { events } = await http<{ events: FeedEvent[] }>(`/feed?userId=${encodeURIComponent(userId)}`);
     return events;
@@ -87,6 +111,18 @@ const realApi: Api = {
     } catch {
       return null;
     }
+  },
+  async getRuns(userId) {
+    const { runs } = await http<{ runs: RegistrationRun[] }>(
+      `/registrations?userId=${encodeURIComponent(userId)}`,
+    );
+    return runs;
+  },
+  async updatePlan(id, plannedActions) {
+    await http(`/registrations/${id}/plan`, {
+      method: "PUT",
+      body: JSON.stringify({ plannedActions }),
+    });
   },
   async approveRun(id) {
     await http(`/registrations/${id}/approve`, { method: "POST" });

@@ -1,12 +1,20 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { api } from "@/lib/api";
+import { api, USE_MOCKS } from "@/lib/api";
 import { AUTOFILL_FIELDS, NEXT_MATCHES, eventById } from "@/lib/mock-data";
+import { currentUserId } from "@/lib/session";
 import { formatDateRange, formatDeadline, locationLabel } from "@/lib/format";
-import type { FieldView, Hackathon } from "@/lib/types";
+import type {
+  FieldView,
+  Hackathon,
+  PlannedAction,
+  RegistrationProgressEvent,
+  RegistrationStatus,
+  UiFieldSource,
+} from "@/lib/types";
 import { Bird, IconCheck, IconLock, IconShield, Spinner } from "@/components/icons";
 
 type AfStep =
@@ -32,7 +40,30 @@ const AF_STEPS: Array<[AfStep, string]> = [
 
 type FieldStatus = "done" | "active" | "pending";
 
-function statusOf(key: string, af: AfStep): FieldStatus {
+// Maps the backend's full state machine to the UI's coarser step set.
+function statusToAf(s: RegistrationStatus): AfStep {
+  switch (s) {
+    case "needs_input":
+      return "needsinput";
+    case "captcha_encountered":
+      return "captcha";
+    case "oauth_redirect":
+      return "oauth";
+    case "awaiting_approval":
+      return "awaiting";
+    case "submitting":
+      return "submitting";
+    case "succeeded":
+      return "success";
+    case "failed":
+      return "failed";
+    default:
+      return "filling"; // queued · introspecting · filling
+  }
+}
+
+// Demo-mode field status (no live run): driven purely by the af step.
+function demoStatusOf(key: string, af: AfStep): FieldStatus {
   if (af === "filling" || af === "captcha" || af === "oauth") {
     if (key === "team_status") return "active";
     if (key === "why_join") return "pending";
@@ -47,21 +78,21 @@ function statusOf(key: string, af: AfStep): FieldStatus {
 
 function FieldRow({
   field,
-  af,
+  status,
   draft,
   onDraft,
   onRegenerate,
   onShorter,
 }: {
   field: FieldView;
-  af: AfStep;
+  status: FieldStatus;
   draft: string;
   onDraft: (v: string) => void;
   onRegenerate: () => void;
   onShorter: () => void;
 }) {
-  const st = statusOf(field.key, af);
-  const wide = field.key === "team_status" || field.key === "why_join";
+  const st = status;
+  const wide = field.key === "team_status" || field.key === "why_join" || field.source === "llm_draft";
   const isDraft = field.source === "llm_draft";
   const isInferred = field.source === "llm_inferred";
 
@@ -164,7 +195,8 @@ function StatusPill({ af }: { af: AfStep }) {
   );
 }
 
-function agentLog(af: AfStep, title: string): React.ReactNode[] {
+// Demo-mode scripted agent log (no live run).
+function demoAgentLog(af: AfStep, title: string): React.ReactNode[] {
   const line = (time: string, body: React.ReactNode, key: string) => (
     <div key={key}>
       <span style={{ color: "var(--placeholder)", marginRight: 8 }}>{time}</span>
@@ -198,14 +230,42 @@ function agentLog(af: AfStep, title: string): React.ReactNode[] {
   return out;
 }
 
+const FIELD_LABEL = (key: string) =>
+  key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
 export default function RegisterTakeoverPage() {
   const { eventId } = useParams<{ eventId: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const stepParam = searchParams.get("step");
+  const runParam = searchParams.get("run");
+
+  // Demo mode: explicit ?step= jump, or mocks on with no real run param.
+  const demoMode = stepParam != null || (USE_MOCKS && runParam == null);
+
   const [event, setEvent] = useState<Hackathon | null>(() => eventById(eventId) ?? null);
-  const [af, setAf] = useState<AfStep>("filling");
-  const draftField = AUTOFILL_FIELDS.find((f) => f.source === "llm_draft");
-  const [draft, setDraft] = useState(draftField?.draftText ?? "");
+  const [af, setAf] = useState<AfStep>(() => {
+    const valid: AfStep[] = ["filling", "needsinput", "captcha", "oauth", "awaiting", "submitting", "success", "failed"];
+    return stepParam && valid.includes(stepParam as AfStep) ? (stepParam as AfStep) : "filling";
+  });
+
+  // ── Live run state (real backend) ────────────────────────────────────────
+  const [runId, setRunId] = useState<string | null>(runParam);
+  const [liveFields, setLiveFields] = useState<FieldView[]>([]);
+  const [liveStatus, setLiveStatus] = useState<Record<string, FieldStatus>>({});
+  const [liveLog, setLiveLog] = useState<React.ReactNode[]>([]);
+  const [confirmationCode, setConfirmationCode] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Per-field editable draft text (keyed by field).
+  const [drafts, setDrafts] = useState<Record<string, string>>(() => {
+    const d: Record<string, string> = {};
+    for (const f of AUTOFILL_FIELDS) if (f.source === "llm_draft") d[f.key] = f.draftText ?? f.value;
+    return d;
+  });
+
   const timers = useRef<number[]>([]);
+  const unsub = useRef<(() => void) | null>(null);
 
   const clearTimers = () => {
     timers.current.forEach((t) => clearTimeout(t));
@@ -216,39 +276,214 @@ export default function RegisterTakeoverPage() {
     setAf(step);
   };
 
+  const pushLog = useCallback((node: React.ReactNode) => {
+    setLiveLog((prev) => [...prev, node]);
+  }, []);
+
+  const logLine = (body: React.ReactNode, key: string) => {
+    const time = new Date().toLocaleTimeString("en-US", { hour12: false });
+    return (
+      <div key={key}>
+        <span style={{ color: "var(--placeholder)", marginRight: 8 }}>{time}</span>
+        {body}
+      </div>
+    );
+  };
+
+  // Apply a streamed progress event to live state.
+  const applyEvent = useCallback((e: RegistrationProgressEvent) => {
+    const plain = (t: string) => <span style={{ color: "var(--mono-body)" }}>{t}</span>;
+    const tag = (t: string, c: string) => <span style={{ color: c, marginRight: 6 }}>{t}</span>;
+
+    switch (e.type) {
+      case "step_started":
+        pushLog(logLine(plain(e.step), `step-${e.step}-${Math.random().toString(36).slice(2, 6)}`));
+        break;
+      case "field_filling":
+        setLiveStatus((s) => ({ ...s, [e.field]: "active" }));
+        setLiveFields((fs) =>
+          fs.some((f) => f.key === e.field)
+            ? fs
+            : [...fs, { key: e.field, label: e.label || FIELD_LABEL(e.field), value: "", source: "profile" }],
+        );
+        pushLog(logLine(plain(`Filling ${e.label || e.field}…`), `ff-${e.field}`));
+        break;
+      case "field_filled": {
+        const src = e.source as UiFieldSource;
+        setLiveStatus((s) => ({ ...s, [e.field]: "done" }));
+        setLiveFields((fs) => {
+          const next = fs.some((f) => f.key === e.field)
+            ? fs.map((f) => (f.key === e.field ? { ...f, value: e.value, source: src } : f))
+            : [...fs, { key: e.field, label: FIELD_LABEL(e.field), value: e.value, source: src }];
+          return next;
+        });
+        if (src === "llm_draft") setDrafts((d) => ({ ...d, [e.field]: e.value }));
+        pushLog(logLine(<>{tag(src, "#3A6B59")}{plain(`${FIELD_LABEL(e.field)} → ${e.value.slice(0, 40)}`)}</>, `fd-${e.field}`));
+        break;
+      }
+      case "paused":
+        pushLog(logLine(<>{tag("Paused", "#B5740E")}{plain(e.reason.replace(/_/g, " "))}</>, `pause-${e.reason}`));
+        break;
+      case "awaiting_approval":
+        setLiveFields(
+          e.plannedActions.map((p: PlannedAction) => ({
+            key: p.field,
+            label: FIELD_LABEL(p.field),
+            value: p.value,
+            source: p.source as UiFieldSource,
+          })),
+        );
+        setLiveStatus(Object.fromEntries(e.plannedActions.map((p) => [p.field, "done" as FieldStatus])));
+        setDrafts((d) => {
+          const next = { ...d };
+          for (const p of e.plannedActions) if (p.source === "llm_draft") next[p.field] = p.value;
+          return next;
+        });
+        pushLog(logLine(<span style={{ color: "var(--teal-fill)", fontWeight: 500 }}>awaiting approval</span>, "await"));
+        break;
+      case "status_changed":
+        setAf(statusToAf(e.status));
+        if (e.confirmationCode) setConfirmationCode(e.confirmationCode);
+        if (e.error) setErrorMsg(`${e.error.stage}: ${e.error.message}`);
+        break;
+      case "screenshot":
+        break;
+    }
+  }, [pushLog]);
+
+  // Resolve the event details.
   useEffect(() => {
     if (!event) api.getEvent(eventId).then((e) => e && setEvent(e));
   }, [eventId, event]);
 
+  // ── Demo mode: scripted auto-advance (preserves the prototype experience) ──
   useEffect(() => {
-    // Deep link from the registrations dashboard (?step=) jumps straight to a state.
-    const param = new URLSearchParams(window.location.search).get("step");
-    const valid: AfStep[] = ["filling", "needsinput", "captcha", "oauth", "awaiting", "submitting", "success", "failed"];
-    if (param && valid.includes(param as AfStep)) {
-      setAf(param as AfStep);
-      return;
-    }
-    // Otherwise auto-advance filling → needs input (mirrors the agent hitting a gap).
+    if (!demoMode) return;
+    if (stepParam) return; // explicit jump — stay put
     const t = window.setTimeout(() => setAf("needsinput"), 2600);
     timers.current.push(t);
     return clearTimers;
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [demoMode, stepParam]);
 
-  const confirmSubmit = () => {
+  // ── Live mode: create (or attach to) a run and subscribe to its SSE stream ──
+  useEffect(() => {
+    if (demoMode) return;
+    let cancelled = false;
+
+    const attach = (id: string) => {
+      if (cancelled) return;
+      setRunId(id);
+      unsub.current = api.streamRun(id, {
+        onStatus: (s) => {
+          if (cancelled) return;
+          setAf(statusToAf(s.status));
+          if (s.plannedActions?.length) {
+            setLiveFields(
+              s.plannedActions.map((p) => ({
+                key: p.field,
+                label: FIELD_LABEL(p.field),
+                value: p.value,
+                source: p.source as UiFieldSource,
+              })),
+            );
+            setLiveStatus(Object.fromEntries(s.plannedActions.map((p) => [p.field, "done" as FieldStatus])));
+          }
+        },
+        onEvent: (e) => !cancelled && applyEvent(e),
+        onError: () => {},
+      });
+    };
+
+    if (runParam) {
+      attach(runParam);
+    } else {
+      api
+        .createRegistration(currentUserId(), eventId)
+        .then((run) => attach(run.id))
+        .catch((err) => {
+          console.error(err);
+          if (!cancelled) {
+            setErrorMsg("Couldn't start the registration run.");
+            setAf("failed");
+          }
+        });
+    }
+
+    return () => {
+      cancelled = true;
+      unsub.current?.();
+      unsub.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [demoMode, runParam, eventId]);
+
+  // ── Actions ────────────────────────────────────────────────────────────────
+  const confirmSubmit = async () => {
     clearTimers();
     setAf("submitting");
-    timers.current.push(window.setTimeout(() => setAf("success"), 1800));
+    if (demoMode || !runId) {
+      timers.current.push(window.setTimeout(() => setAf("success"), 1800));
+      return;
+    }
+    try {
+      // Persist any confirm-gate edits (e.g. reworded draft answers) before submit.
+      const editedPlan: PlannedAction[] = liveFields.map((f) => ({
+        field: f.key,
+        value: f.source === "llm_draft" ? drafts[f.key] ?? f.value : f.value,
+        // Contract source has no "llm_draft" at submit time — fold to llm_inferred.
+        source: (f.source === "llm_draft" ? "llm_inferred" : f.source) as PlannedAction["source"],
+      }));
+      if (editedPlan.length) await api.updatePlan(runId, editedPlan).catch(() => {});
+      await api.approveRun(runId);
+      // The SSE stream will deliver status_changed → success.
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Approve failed.");
+      setAf("failed");
+    }
   };
+
+  const cancel = async () => {
+    clearTimers();
+    if (demoMode || !runId) {
+      go("filling");
+      return;
+    }
+    try {
+      await api.cancelRun(runId);
+    } catch (err) {
+      console.error(err);
+    }
+    router.push("/registrations");
+  };
+
   const retry = () => {
-    clearTimers();
-    setAf("submitting");
-    timers.current.push(window.setTimeout(() => setAf("success"), 1600));
+    if (demoMode || !runId) {
+      clearTimers();
+      setAf("submitting");
+      timers.current.push(window.setTimeout(() => setAf("success"), 1600));
+      return;
+    }
+    // Re-enter with a fresh run.
+    router.push(`/register/${eventId}`);
   };
-  const regenerate = () => setDraft(draftField?.draftText ?? "");
-  const shorter = () => setDraft((d) => d.split(". ")[0].replace(/\.?$/, "."));
+
+  const setDraftFor = (key: string, v: string) => setDrafts((d) => ({ ...d, [key]: v }));
+  const regenerate = (key: string) => {
+    const base = AUTOFILL_FIELDS.find((f) => f.key === key)?.draftText;
+    setDraftFor(key, base ?? drafts[key] ?? "");
+  };
+  const shorter = (key: string) => setDraftFor(key, (drafts[key] ?? "").split(". ")[0].replace(/\.?$/, "."));
 
   const title = event?.title ?? "this event";
   const isForm = ["filling", "needsinput", "awaiting", "submitting", "captcha", "oauth"].includes(af);
+
+  // Choose field set + status resolver + log based on mode.
+  const fields = demoMode ? AUTOFILL_FIELDS : liveFields;
+  const resolveStatus = (key: string): FieldStatus =>
+    demoMode ? demoStatusOf(key, af) : liveStatus[key] ?? "pending";
+  const logNodes = demoMode ? demoAgentLog(af, title) : liveLog;
 
   return (
     <div style={{ height: "100vh", background: "var(--bg)", display: "flex", flexDirection: "column", position: "relative" }}>
@@ -261,32 +496,54 @@ export default function RegisterTakeoverPage() {
         <button className="btn-ghost" onClick={() => router.push("/")}>✕ Close</button>
       </div>
 
-      {isForm && <FormView af={af} event={event} title={title} draft={draft} setDraft={setDraft} go={go} confirmSubmit={confirmSubmit} regenerate={regenerate} shorter={shorter} />}
-      {af === "success" && <SuccessView event={event} title={title} router={router} />}
-      {af === "failed" && <FailedView title={title} retry={retry} router={router} />}
+      {isForm && (
+        <FormView
+          af={af}
+          event={event}
+          title={title}
+          fields={fields}
+          resolveStatus={resolveStatus}
+          logNodes={logNodes}
+          drafts={drafts}
+          onDraft={setDraftFor}
+          go={go}
+          confirmSubmit={confirmSubmit}
+          cancel={cancel}
+          regenerate={regenerate}
+          shorter={shorter}
+        />
+      )}
+      {af === "success" && <SuccessView event={event} title={title} router={router} confirmationCode={confirmationCode} />}
+      {af === "failed" && <FailedView title={title} retry={retry} router={router} errorMsg={errorMsg} />}
 
-      <div className="demo-bar">
-        <span className="lbl">DEMO STATES</span>
-        {AF_STEPS.map(([k, l]) => (
-          <button key={k} className={`demo-chip${af === k ? " active" : ""}`} onClick={() => go(k)}>{l}</button>
-        ))}
-      </div>
+      {(demoMode || stepParam) && (
+        <div className="demo-bar">
+          <span className="lbl">DEMO STATES</span>
+          {AF_STEPS.map(([k, l]) => (
+            <button key={k} className={`demo-chip${af === k ? " active" : ""}`} onClick={() => go(k)}>{l}</button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 function FormView({
-  af, event, title, draft, setDraft, go, confirmSubmit, regenerate, shorter,
+  af, event, title, fields, resolveStatus, logNodes, drafts, onDraft, go, confirmSubmit, cancel, regenerate, shorter,
 }: {
   af: AfStep;
   event: Hackathon | null;
   title: string;
-  draft: string;
-  setDraft: (v: string) => void;
+  fields: FieldView[];
+  resolveStatus: (key: string) => FieldStatus;
+  logNodes: React.ReactNode[];
+  drafts: Record<string, string>;
+  onDraft: (key: string, v: string) => void;
   go: (s: AfStep) => void;
   confirmSubmit: () => void;
-  regenerate: () => void;
-  shorter: () => void;
+  cancel: () => void;
+  regenerate: (key: string) => void;
+  shorter: (key: string) => void;
 }) {
   const deadline = event ? formatDeadline(event.dates.registrationClosesAt) : "—";
   const place = event ? locationLabel(event.location) : "";
@@ -305,23 +562,35 @@ function FormView({
         <div style={{ padding: "26px 30px", borderRight: "1px solid var(--border-lt2)" }}>
           <div className="section-label" style={{ marginBottom: 18 }}>REGISTRATION FORM</div>
           <PauseCallout af={af} go={go} />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-            {AUTOFILL_FIELDS.map((f) => (
-              <FieldRow key={f.key} field={f} af={af} draft={draft} onDraft={setDraft} onRegenerate={regenerate} onShorter={shorter} />
-            ))}
-          </div>
+          {fields.length === 0 ? (
+            <div className="mono" style={{ color: "var(--faint)", padding: "20px 0" }}>Reading the form…</div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              {fields.map((f) => (
+                <FieldRow
+                  key={f.key}
+                  field={f}
+                  status={resolveStatus(f.key)}
+                  draft={drafts[f.key] ?? f.draftText ?? f.value}
+                  onDraft={(v) => onDraft(f.key, v)}
+                  onRegenerate={() => regenerate(f.key)}
+                  onShorter={() => shorter(f.key)}
+                />
+              ))}
+            </div>
+          )}
         </div>
         <div style={{ padding: "26px 30px", background: "var(--panel)" }}>
           <div className="section-label" style={{ marginBottom: 18 }}>AGENT ACTIVITY</div>
           <div className="mono" style={{ display: "flex", flexDirection: "column", gap: 11, fontSize: 12.5, lineHeight: 1.45 }}>
-            {agentLog(af, title)}
+            {logNodes.length === 0 ? <span style={{ color: "var(--placeholder)" }}>Waiting for the agent…</span> : logNodes}
           </div>
         </div>
       </div>
 
       <div style={{ background: "#fff", borderTop: "1px solid var(--border-lt2)" }}>
         <div style={{ maxWidth: 1180, margin: "0 auto", padding: "18px 30px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <Footer af={af} go={go} confirmSubmit={confirmSubmit} />
+          <Footer af={af} confirmSubmit={confirmSubmit} cancel={cancel} />
         </div>
       </div>
     </div>
@@ -366,7 +635,7 @@ function PauseCallout({ af, go }: { af: AfStep; go: (s: AfStep) => void }) {
   return null;
 }
 
-function Footer({ af, go, confirmSubmit }: { af: AfStep; go: (s: AfStep) => void; confirmSubmit: () => void }) {
+function Footer({ af, confirmSubmit, cancel }: { af: AfStep; confirmSubmit: () => void; cancel: () => void }) {
   const lockedBtn = <button className="btn" disabled style={{ padding: "11px 24px", fontSize: 14.5 }}>Confirm &amp; submit</button>;
   const amberDot = <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--amber-dot)" }} />;
 
@@ -399,7 +668,7 @@ function Footer({ af, go, confirmSubmit }: { af: AfStep; go: (s: AfStep) => void
       <>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13.5, color: "var(--teal-fill)", fontWeight: 500 }}><IconShield />Ready — review, then confirm</span>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <button className="btn-ghost" onClick={() => go("filling")}>Cancel</button>
+          <button className="btn-ghost" onClick={cancel}>Cancel</button>
           <button className="btn btn-primary" style={{ padding: "11px 24px", fontSize: 14.5 }} onClick={confirmSubmit}>Confirm &amp; submit</button>
         </div>
       </>
@@ -416,9 +685,10 @@ function Footer({ af, go, confirmSubmit }: { af: AfStep; go: (s: AfStep) => void
   return null;
 }
 
-function SuccessView({ event, title, router }: { event: Hackathon | null; title: string; router: ReturnType<typeof useRouter> }) {
+function SuccessView({ event, title, router, confirmationCode }: { event: Hackathon | null; title: string; router: ReturnType<typeof useRouter>; confirmationCode: string | null }) {
   const place = event ? locationLabel(event.location) : "";
   const dates = event ? formatDateRange(event.dates.startsAt, event.dates.endsAt) : "";
+  const code = confirmationCode ?? "LUM-8K2F9Q";
   return (
     <div style={{ flex: 1, overflow: "auto", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 24px" }}>
       <div className="card" style={{ width: 460, borderRadius: 18, overflow: "hidden" }}>
@@ -426,7 +696,7 @@ function SuccessView({ event, title, router }: { event: Hackathon | null; title:
           <Bird size={46} color="#C97B14" />
           <div style={{ fontWeight: 700, fontSize: 25, letterSpacing: "-0.02em", color: "var(--amber-head)", marginTop: 8 }}>You&apos;re in. Worm secured.</div>
           <div style={{ fontSize: 15, color: "var(--amber-sub)", marginTop: 8 }}>{title} · {place}</div>
-          <div className="mono" style={{ display: "inline-block", marginTop: 16, fontSize: 14, letterSpacing: "0.08em", color: "var(--amber-head)", background: "#F7E2C4", border: "1px solid #ECCF9E", borderRadius: 9, padding: "8px 16px" }}>LUM-8K2F9Q</div>
+          <div className="mono" style={{ display: "inline-block", marginTop: 16, fontSize: 14, letterSpacing: "0.08em", color: "var(--amber-head)", background: "#F7E2C4", border: "1px solid #ECCF9E", borderRadius: 9, padding: "8px 16px" }}>{code}</div>
         </div>
         <div style={{ padding: "22px 24px" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
@@ -467,7 +737,7 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-function FailedView({ title, retry, router }: { title: string; retry: () => void; router: ReturnType<typeof useRouter> }) {
+function FailedView({ title, retry, router, errorMsg }: { title: string; retry: () => void; router: ReturnType<typeof useRouter>; errorMsg: string | null }) {
   return (
     <div style={{ flex: 1, overflow: "auto", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 24px" }}>
       <div className="card" style={{ width: 440, borderRadius: 18, padding: "32px 30px", textAlign: "center" }}>
@@ -480,7 +750,7 @@ function FailedView({ title, retry, router }: { title: string; retry: () => void
         </div>
         <div style={{ fontWeight: 700, fontSize: 20, letterSpacing: "-0.01em", marginTop: 16 }}>Couldn&apos;t submit — site rejected it.</div>
         <div style={{ fontSize: 14, color: "var(--muted)", marginTop: 8, lineHeight: 1.5 }}>{title}&apos;s form returned an error on submit. Your answers are saved — nothing was lost.</div>
-        <div className="mono" style={{ fontSize: 12, color: "var(--red-text)", background: "var(--red-bg)", borderRadius: 9, padding: "10px 12px", marginTop: 16, lineHeight: 1.5 }}>ERR 422 · field &quot;phone&quot; required but not in profile</div>
+        <div className="mono" style={{ fontSize: 12, color: "var(--red-text)", background: "var(--red-bg)", borderRadius: 9, padding: "10px 12px", marginTop: 16, lineHeight: 1.5 }}>{errorMsg ?? 'ERR 422 · field "phone" required but not in profile'}</div>
         <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
           <button className="btn btn-neutral" style={{ flex: 1, padding: 12, justifyContent: "center" }} onClick={() => router.push("/registrations")}>Back to registrations</button>
           <button className="btn btn-primary" style={{ flex: 1, padding: 12 }} onClick={retry}>Retry</button>

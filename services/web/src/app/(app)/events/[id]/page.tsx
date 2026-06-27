@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { DEMO_USER_ID } from "@/lib/mock-data";
+import { currentUserId } from "@/lib/session";
 import { formatDateRange, formatDeadline, locationLabel } from "@/lib/format";
 import type { FeedEvent, Hackathon } from "@/lib/types";
 import { feedExtras } from "@/lib/mock-data";
@@ -22,7 +22,7 @@ export default function EventDetailPage() {
 
   useEffect(() => {
     let alive = true;
-    Promise.all([api.getEvent(id), api.getFeed(DEMO_USER_ID)]).then(([ev, feed]) => {
+    Promise.all([api.getEvent(id), api.getFeed(currentUserId()).catch(() => [])]).then(([ev, feed]) => {
       if (!alive) return;
       setEvent(ev);
       setRanked(feed.find((f) => f.hackathonId === id) ?? null);

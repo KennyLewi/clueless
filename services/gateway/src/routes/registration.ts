@@ -73,6 +73,47 @@ export const registrationRoutes: FastifyPluginAsync = async (server) => {
     },
   });
 
+  // PUT /registrations/:id/plan — persist user-edited planned actions before approval.
+  // Only allowed while awaiting_approval; the worker's submit phase reuses these values,
+  // so edits at the confirm gate (e.g. a reworded draft answer) actually get submitted.
+  server.put<{ Params: { id: string }; Body: { plannedActions: PlannedAction[] } }>("/:id/plan", {
+    schema: {
+      body: {
+        type: "object",
+        required: ["plannedActions"],
+        properties: {
+          plannedActions: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["field", "value", "source"],
+              properties: {
+                field: { type: "string" },
+                value: { type: "string" },
+                source: { type: "string" },
+              },
+            },
+          },
+        },
+      },
+    },
+    handler: async (req, reply) => {
+      const { id } = req.params;
+      const { plannedActions } = req.body;
+      const result = await db.registrationRun.updateMany({
+        where: { id, status: "awaiting_approval" },
+        data: { plannedActions: plannedActions as unknown as object[] },
+      });
+      if (result.count === 0) {
+        const run = await db.registrationRun.findUnique({ where: { id } });
+        if (!run) { reply.status(404); return { error: "Run not found" }; }
+        reply.status(409);
+        return { error: `Cannot edit plan in status '${run.status}' — must be 'awaiting_approval'` };
+      }
+      return { runId: id, updated: true };
+    },
+  });
+
   // POST /registrations/:id/approve
   // Atomically transitions awaiting_approval → submitting to prevent double-submit.
   server.post<{ Params: { id: string } }>("/:id/approve", {

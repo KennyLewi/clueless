@@ -1,9 +1,12 @@
 "use client";
 
-import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { INTERESTS, DEMO_PROFILE, VOICE } from "@/lib/mock-data";
+import { INTERESTS } from "@/lib/mock-data";
+import { api } from "@/lib/api";
+import { currentUserId } from "@/lib/session";
+import type { UserProfile } from "@/lib/types";
 
 function PromptCard({ children, accent }: { children: ReactNode; accent?: boolean }) {
   return (
@@ -21,9 +24,67 @@ function PromptCard({ children, accent }: { children: ReactNode; accent?: boolea
 }
 
 export default function VoicePage() {
-  const [interests, setInterests] = useState<string[]>(DEMO_PROFILE.interests ?? []);
+  const router = useRouter();
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [interests, setInterests] = useState<string[]>([]);
+  const [oneLiner, setOneLiner] = useState("");
+  const [proudProject, setProudProject] = useState("");
+  const [outsideLane, setOutsideLane] = useState("");
+  const [essay, setEssay] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api.getProfile(currentUserId()).then((p) => {
+      if (!p) return;
+      setProfile(p);
+      setInterests(p.interests ?? []);
+      setOneLiner(p.voice?.oneLiner ?? "");
+      setProudProject(p.voice?.proudProject ?? "");
+      setOutsideLane(p.voice?.outsideLane ?? "");
+    });
+  }, []);
+
   const toggle = (t: string) =>
     setInterests((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]));
+
+  const essayWords = essay.trim() ? essay.trim().split(/\s+/).length : 0;
+
+  const save = async (skipVoice: boolean) => {
+    setSaving(true);
+    try {
+      const writingSamples = [
+        ...(profile?.voice?.writingSamples ?? []),
+        ...(essay.trim() && !skipVoice ? [{ label: "Pasted essay", text: essay.trim() }] : []),
+      ];
+      const toSave: UserProfile = {
+        id: currentUserId(),
+        name: profile?.name ?? "Anonymous",
+        email: profile?.email ?? "",
+        school: profile?.school,
+        skills: profile?.skills ?? [],
+        interests: skipVoice ? profile?.interests ?? [] : interests,
+        willingToTravel: profile?.willingToTravel ?? false,
+        travelRegions: profile?.travelRegions,
+        resumeUrl: profile?.resumeUrl,
+        locationBase: profile?.locationBase,
+        formAnswers: profile?.formAnswers ?? {},
+        voice: skipVoice
+          ? profile?.voice
+          : {
+              oneLiner: oneLiner.trim() || undefined,
+              proudProject: proudProject.trim() || undefined,
+              outsideLane: outsideLane.trim() || undefined,
+              writingSamples: writingSamples.length ? writingSamples : undefined,
+            },
+      };
+      await api.putProfile(toSave);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSaving(false);
+      router.push("/");
+    }
+  };
 
   return (
     <div style={{ height: "100vh", background: "var(--bg)", overflow: "auto" }}>
@@ -48,12 +109,12 @@ export default function VoicePage() {
           <PromptCard>
             <div style={{ fontWeight: 600, fontSize: 18, letterSpacing: "-0.01em" }}>One line about you.</div>
             <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 6 }}>How you&apos;d introduce yourself to a team.</div>
-            <input className="input" style={{ marginTop: 18, fontSize: 15 }} defaultValue={VOICE.oneLiner} />
+            <input className="input" style={{ marginTop: 18, fontSize: 15 }} value={oneLiner} onChange={(e) => setOneLiner(e.target.value)} />
           </PromptCard>
           <PromptCard>
             <div style={{ fontWeight: 600, fontSize: 18, letterSpacing: "-0.01em" }}>Something you&apos;ve built that represents how you work.</div>
             <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 6 }}>We learn your voice from this — not your topic.</div>
-            <textarea className="input" style={{ marginTop: 18, minHeight: 92, resize: "vertical", lineHeight: 1.55 }} defaultValue={VOICE.proudProject} />
+            <textarea className="input" style={{ marginTop: 18, minHeight: 92, resize: "vertical", lineHeight: 1.55 }} value={proudProject} onChange={(e) => setProudProject(e.target.value)} />
           </PromptCard>
           <PromptCard>
             <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
@@ -61,7 +122,7 @@ export default function VoicePage() {
               <span className="mono" style={{ fontSize: 11, color: "var(--faint2)" }}>optional</span>
             </div>
             <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 6 }}>Helps us surface stretch matches.</div>
-            <input className="input input-dashed" style={{ marginTop: 18, fontSize: 15 }} placeholder="e.g. fintech, climate, devtools…" />
+            <input className="input input-dashed" style={{ marginTop: 18, fontSize: 15 }} placeholder="e.g. fintech, climate, devtools…" value={outsideLane} onChange={(e) => setOutsideLane(e.target.value)} />
           </PromptCard>
           <PromptCard accent>
             <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
@@ -73,17 +134,19 @@ export default function VoicePage() {
             <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 6, lineHeight: 1.5 }}>
               This is the strongest way to capture your voice — a personal statement, blog post, or project README in your own words. The more you paste, the better the agent sounds like you.
             </div>
-            <textarea className="input" style={{ marginTop: 18, border: "1px solid var(--teal-border)", background: "#FBFCFB", minHeight: 150, resize: "vertical", lineHeight: 1.6 }} placeholder="Paste a personal statement, blog post, essay, or detailed README…" />
-            <div className="mono" style={{ fontSize: 11.5, color: "#A39E97", marginTop: 8 }}>0 words · aim for 150+</div>
+            <textarea className="input" style={{ marginTop: 18, border: "1px solid var(--teal-border)", background: "#FBFCFB", minHeight: 150, resize: "vertical", lineHeight: 1.6 }} placeholder="Paste a personal statement, blog post, essay, or detailed README…" value={essay} onChange={(e) => setEssay(e.target.value)} />
+            <div className="mono" style={{ fontSize: 11.5, color: "#A39E97", marginTop: 8 }}>{essayWords} words · aim for 150+</div>
           </PromptCard>
         </div>
       </div>
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(246,244,241,0.92)", borderTop: "1px solid #E5E0D9", backdropFilter: "blur(6px)" }}>
         <div style={{ width: 580, maxWidth: "100%", margin: "0 auto", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <Link href="/onboarding/basics" className="btn-ghost">Back</Link>
+          <button className="btn-ghost" onClick={() => router.push("/onboarding/basics")}>Back</button>
           <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-            <Link href="/" className="btn-ghost">Skip voice step</Link>
-            <Link href="/" className="btn btn-primary">Save &amp; find hackathons</Link>
+            <button className="btn-ghost" onClick={() => save(true)} disabled={saving}>Skip voice step</button>
+            <button className="btn btn-primary" onClick={() => save(false)} disabled={saving}>
+              {saving ? "Saving…" : "Save & find hackathons"}
+            </button>
           </div>
         </div>
       </div>
