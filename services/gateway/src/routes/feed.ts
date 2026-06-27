@@ -128,6 +128,7 @@ export const feedRoutes: FastifyPluginAsync = async (server) => {
   server.post("/discover/trigger", {
     handler: async () => {
       await discoveryQueue.add("run", { adapter: "exa" });
+      await discoveryQueue.add("run", { adapter: "luma" });
       return { queued: true };
     },
   });

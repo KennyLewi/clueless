@@ -13,6 +13,62 @@ export const formQueue = new Queue<FormIntrospectJob>(QUEUE_NAMES.FORM_INTROSPEC
   connection: { url: REDIS_URL },
 });
 
+function inferProvider(rawUrl: string, registrationUrl?: string): string {
+  const check = (url: string) => {
+    if (url.includes("lu.ma")) return "luma";
+    if (url.includes("devpost.com")) return "devpost";
+    if (url.includes("docs.google.com/forms")) return "google_form";
+    return null;
+  };
+  if (registrationUrl) {
+    const result = check(registrationUrl);
+    if (result) return result;
+  }
+  return check(rawUrl) ?? "custom";
+}
+
+// Canonical forms for themes Exa commonly returns in hyphenated or multi-word variants.
+// Only maps clear synonyms — keeps distinct sub-topics (e.g. nlp, computer-vision) intact.
+const THEME_ALIASES: Record<string, string> = {
+  "artificial-intelligence": "ai",
+  "artificial intelligence": "ai",
+  "machine-learning": "ai",
+  "machine learning": "ai",
+  "generative-ai": "ai",
+  "generative ai": "ai",
+  "deep-learning": "ai",
+  "deep learning": "ai",
+  "defi": "web3",
+  "decentralized-finance": "web3",
+  "financial-technology": "fintech",
+  "financial technology": "fintech",
+};
+
+function normalizeThemes(themes: string[]): string[] {
+  return [...new Set(themes.map((t) => {
+    const lower = t.toLowerCase();
+    return THEME_ALIASES[lower] ?? lower;
+  }))];
+}
+
+const DEDUP_THRESHOLD = 0.7;
+const DEDUP_DATE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000; // ±30 days
+
+function tokenize(title: string): Set<string> {
+  return new Set(
+    title.toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 1),
+  );
+}
+
+function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
+  const intersection = [...a].filter((w) => b.has(w)).length;
+  const union = new Set([...a, ...b]).size;
+  return union === 0 ? 0 : intersection / union;
+}
+
 function parseLocation(raw: string | undefined): {
   mode: "online" | "in_person" | "hybrid";
   city?: string;
@@ -58,9 +114,10 @@ export async function handleNormalize(job: Job<NormalizeListingJob>) {
     locationCountry: location.country,
     startsAt: toDate(fields["startsAt"]),
     registrationClosesAt: toDate(fields["registrationClosesAt"]),
-    themes: (fields["themes"] as string[]) ?? [],
+    themes: normalizeThemes((fields["themes"] as string[]) ?? []),
     eligibility: fields["eligibility"] as string | undefined,
     registrationFormUrl: fields["registrationUrl"] as string | undefined,
+    registrationProvider: inferProvider(listing.rawUrl, fields["registrationUrl"] as string | undefined),
   };
 
   // Serializable transaction prevents concurrent normalize jobs for the same hackathon
@@ -68,9 +125,39 @@ export async function handleNormalize(job: Job<NormalizeListingJob>) {
   let isNew = false;
   let contentChanged = false;
 
+  let effectiveId = hackathonId;
+
   await db.$transaction(async (tx) => {
+    // Cross-source dedup: find an existing hackathon with a similar title before
+    // creating a new row. Uses date window (when available) to bound the candidate
+    // set, then Jaccard word similarity to confirm the match.
+    const titleTokens = tokenize(listing.title);
+    const startsAtDate = sharedFields.startsAt;
+    const dedupCandidates = await tx.hackathon.findMany({
+      where: startsAtDate ? {
+        startsAt: {
+          gte: new Date(startsAtDate.getTime() - DEDUP_DATE_WINDOW_MS),
+          lte: new Date(startsAtDate.getTime() + DEDUP_DATE_WINDOW_MS),
+        },
+      } : {},
+      select: { id: true, title: true },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+
+    for (const candidate of dedupCandidates) {
+      if (jaccardSimilarity(titleTokens, tokenize(candidate.title)) >= DEDUP_THRESHOLD) {
+        effectiveId = candidate.id;
+        break;
+      }
+    }
+
+    if (effectiveId !== hackathonId) {
+      console.log(`[normalize] dedup merge: "${listing.title}" → existing ${effectiveId}`);
+    }
+
     const existing = await tx.hackathon.findUnique({
-      where: { id: hackathonId },
+      where: { id: effectiveId },
       select: { contentHash: true, sources: true },
     });
 
@@ -84,11 +171,10 @@ export async function handleNormalize(job: Job<NormalizeListingJob>) {
     const mergedSources = sourceAlreadyRecorded ? existingSources : [...existingSources, source];
 
     await tx.hackathon.upsert({
-      where: { id: hackathonId },
+      where: { id: effectiveId },
       create: {
-        id: hackathonId,
+        id: effectiveId,
         url: listing.rawUrl,
-        registrationProvider: "unknown",
         sources: [source] as object[],
         ...sharedFields,
       },
@@ -101,13 +187,13 @@ export async function handleNormalize(job: Job<NormalizeListingJob>) {
 
   // Downstream queue adds happen after commit.
   if (isNew || contentChanged) {
-    await rankQueue.add("recompute", { kind: "hackathon", hackathonId });
+    await rankQueue.add("recompute", { kind: "hackathon", hackathonId: effectiveId });
 
     const formUrl = fields["registrationUrl"] as string | undefined;
     if (formUrl) {
-      await formQueue.add("introspect", { hackathonId, formUrl });
+      await formQueue.add("introspect", { hackathonId: effectiveId, formUrl });
     }
   }
 
-  return { hackathonId, isNew, contentChanged };
+  return { hackathonId: effectiveId, isNew, contentChanged };
 }

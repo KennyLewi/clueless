@@ -89,11 +89,12 @@ export class ExaAdapter implements SourceAdapter {
       "upcoming hackathons open for registration AI fintech blockchain 2026",
       {
         type: "deep",
+        category: "news",
         numResults: 25,
         systemPrompt:
           "Find hackathon events. Prefer official event pages and organizer announcements. Collapse duplicates from the same event. Ignore meetups, webinars, and competitions that are not hackathons.",
         outputSchema: EXA_OUTPUT_SCHEMA as unknown as DeepObjectOutputSchema,
-        contents: { highlights: true },
+        contents: { highlights: true, maxAgeHours: 72 },
         ...(this.includeDomains?.length ? { includeDomains: this.includeDomains } : {}),
       },
     );
