@@ -1,7 +1,8 @@
 import type { FastifyPluginAsync } from "fastify";
 import { Queue } from "bullmq";
 import { UserProfileSchema } from "@earlybirds/contracts";
-import type { RankRecomputeJob } from "@earlybirds/contracts";
+import type { RankRecomputeJob, UserProfile } from "@earlybirds/contracts";
+import { Prisma } from "@earlybirds/db";
 import { QUEUE_NAMES } from "@earlybirds/contracts";
 import { db } from "@earlybirds/db";
 import { REDIS_URL } from "../config.js";
@@ -21,35 +22,25 @@ export const profileRoutes: FastifyPluginAsync = async (server) => {
       }
       const p = result.data;
 
+      const profileData = {
+        name: p.name,
+        email: p.email,
+        school: p.school,
+        resumeUrl: p.resumeUrl,
+        skills: p.skills,
+        interests: p.interests,
+        locationCity: p.locationBase?.city,
+        locationCountry: p.locationBase?.country,
+        willingToTravel: p.willingToTravel,
+        travelRegions: p.travelRegions ?? [],
+        formAnswers: p.formAnswers,
+        voice: p.voice ?? Prisma.JsonNull,
+      };
+
       await db.userProfile.upsert({
         where: { id: p.id },
-        create: {
-          id: p.id,
-          name: p.name,
-          email: p.email,
-          school: p.school,
-          resumeUrl: p.resumeUrl,
-          skills: p.skills,
-          interests: p.interests,
-          locationCity: p.locationBase?.city,
-          locationCountry: p.locationBase?.country,
-          willingToTravel: p.willingToTravel,
-          travelRegions: p.travelRegions ?? [],
-          formAnswers: p.formAnswers,
-        },
-        update: {
-          name: p.name,
-          email: p.email,
-          school: p.school,
-          resumeUrl: p.resumeUrl,
-          skills: p.skills,
-          interests: p.interests,
-          locationCity: p.locationBase?.city,
-          locationCountry: p.locationBase?.country,
-          willingToTravel: p.willingToTravel,
-          travelRegions: p.travelRegions ?? [],
-          formAnswers: p.formAnswers,
-        },
+        create: { id: p.id, ...profileData },
+        update: profileData,
       });
 
       await rankQueue.add("recompute", { kind: "user", userId: p.id });
@@ -82,6 +73,7 @@ export const profileRoutes: FastifyPluginAsync = async (server) => {
           willingToTravel: user.willingToTravel,
           travelRegions: user.travelRegions,
           formAnswers: user.formAnswers as Record<string, string>,
+          voice: user.voice as UserProfile["voice"] ?? undefined,
         },
       };
     },

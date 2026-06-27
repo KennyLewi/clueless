@@ -113,13 +113,13 @@ export class PlaywrightRunner {
     }
   }
 
-  // Re-fills the form (fresh browser) then submits. Returns confirmation screenshot.
+  // Re-fills the form (fresh browser) then submits. Returns confirmation screenshot + code.
   async submit(
     run: RegistrationRun,
     formUrl: string,
     knownFields: FormFieldSpec[],
     onEvent: (e: RegistrationProgressEvent) => void,
-  ): Promise<{ finalScreenshot: string }> {
+  ): Promise<{ finalScreenshot: string; confirmationCode?: string }> {
     let browser: Browser | null = null;
     try {
       browser = await chromium.launch({ args: ["--no-sandbox", "--disable-setuid-sandbox"] });
@@ -158,8 +158,25 @@ export class PlaywrightRunner {
 
       await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => {});
 
+      // Extract confirmation/reference code from the post-submit page.
+      let confirmationCode: string | undefined;
+      try {
+        confirmationCode = await page.evaluate(() => {
+          const text = document.body.innerText;
+          const m = text.match(
+            /(?:confirmation|reference|registration|booking|order)\s*(?:code|number|id|#|no\.?)?\s*[:\-–]?\s*([A-Z0-9][A-Z0-9\-]{2,})/i,
+          );
+          return m?.[1];
+        });
+      } catch (err) {
+        console.warn("[playwright] confirmation code extraction failed:", err);
+      }
+
       const finalShot = await page.screenshot();
-      return { finalScreenshot: `data:image/png;base64,${finalShot.toString("base64")}` };
+      return {
+        finalScreenshot: `data:image/png;base64,${finalShot.toString("base64")}`,
+        confirmationCode,
+      };
     } finally {
       await browser?.close();
     }
