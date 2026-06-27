@@ -51,6 +51,24 @@ function normalizeThemes(themes: string[]): string[] {
   }))];
 }
 
+const DEDUP_THRESHOLD = 0.7;
+const DEDUP_DATE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000; // ±30 days
+
+function tokenize(title: string): Set<string> {
+  return new Set(
+    title.toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 1),
+  );
+}
+
+function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
+  const intersection = [...a].filter((w) => b.has(w)).length;
+  const union = new Set([...a, ...b]).size;
+  return union === 0 ? 0 : intersection / union;
+}
+
 function parseLocation(raw: string | undefined): {
   mode: "online" | "in_person" | "hybrid";
   city?: string;
@@ -107,9 +125,39 @@ export async function handleNormalize(job: Job<NormalizeListingJob>) {
   let isNew = false;
   let contentChanged = false;
 
+  let effectiveId = hackathonId;
+
   await db.$transaction(async (tx) => {
+    // Cross-source dedup: find an existing hackathon with a similar title before
+    // creating a new row. Uses date window (when available) to bound the candidate
+    // set, then Jaccard word similarity to confirm the match.
+    const titleTokens = tokenize(listing.title);
+    const startsAtDate = sharedFields.startsAt;
+    const dedupCandidates = await tx.hackathon.findMany({
+      where: startsAtDate ? {
+        startsAt: {
+          gte: new Date(startsAtDate.getTime() - DEDUP_DATE_WINDOW_MS),
+          lte: new Date(startsAtDate.getTime() + DEDUP_DATE_WINDOW_MS),
+        },
+      } : {},
+      select: { id: true, title: true },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+
+    for (const candidate of dedupCandidates) {
+      if (jaccardSimilarity(titleTokens, tokenize(candidate.title)) >= DEDUP_THRESHOLD) {
+        effectiveId = candidate.id;
+        break;
+      }
+    }
+
+    if (effectiveId !== hackathonId) {
+      console.log(`[normalize] dedup merge: "${listing.title}" → existing ${effectiveId}`);
+    }
+
     const existing = await tx.hackathon.findUnique({
-      where: { id: hackathonId },
+      where: { id: effectiveId },
       select: { contentHash: true, sources: true },
     });
 
@@ -123,9 +171,9 @@ export async function handleNormalize(job: Job<NormalizeListingJob>) {
     const mergedSources = sourceAlreadyRecorded ? existingSources : [...existingSources, source];
 
     await tx.hackathon.upsert({
-      where: { id: hackathonId },
+      where: { id: effectiveId },
       create: {
-        id: hackathonId,
+        id: effectiveId,
         url: listing.rawUrl,
         sources: [source] as object[],
         ...sharedFields,
@@ -139,13 +187,13 @@ export async function handleNormalize(job: Job<NormalizeListingJob>) {
 
   // Downstream queue adds happen after commit.
   if (isNew || contentChanged) {
-    await rankQueue.add("recompute", { kind: "hackathon", hackathonId });
+    await rankQueue.add("recompute", { kind: "hackathon", hackathonId: effectiveId });
 
     const formUrl = fields["registrationUrl"] as string | undefined;
     if (formUrl) {
-      await formQueue.add("introspect", { hackathonId, formUrl });
+      await formQueue.add("introspect", { hackathonId: effectiveId, formUrl });
     }
   }
 
-  return { hackathonId, isNew, contentChanged };
+  return { hackathonId: effectiveId, isNew, contentChanged };
 }
