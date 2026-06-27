@@ -1,0 +1,24 @@
+{
+  "name": "@earlybirds/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/worker.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@earlybirds/contracts": "*",
+    "@earlybirds/db": "*",
+    "bullmq": "^5.34.6",
+    "exa-js": "2.14.0",
+    "ioredis": "^5.4.1",
+    "playwright": "^1.49.1",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

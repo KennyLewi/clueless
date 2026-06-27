@@ -1,0 +1,67 @@
+{
+  "_note": "Cached Exa /search response for offline dev. Replace with a live capture once EXA_API_KEY is provisioned.",
+  "requestedAt": "2026-06-27T00:00:00Z",
+  "query": "upcoming hackathons open for registration AI fintech blockchain 2026",
+  "output": {
+    "content": {
+      "events": [
+        {
+          "title": "Global AI Hackathon 2026",
+          "url": "https://devpost.com/hackathons/global-ai-2026",
+          "registrationUrl": "https://devpost.com/hackathons/global-ai-2026/register",
+          "startsAt": "2026-08-15T09:00:00Z",
+          "registrationClosesAt": "2026-08-10T23:59:59Z",
+          "location": "Online",
+          "themes": ["ai", "machine-learning", "nlp"],
+          "description": "Build the next generation of AI-powered applications in 48 hours. $50,000 in prizes.",
+          "organizer": "Devpost Inc."
+        },
+        {
+          "title": "FinTech Hack Singapore 2026",
+          "url": "https://lu.ma/fintech-hack-sg-2026",
+          "registrationUrl": "https://lu.ma/fintech-hack-sg-2026",
+          "startsAt": "2026-09-05T09:00:00Z",
+          "registrationClosesAt": "2026-09-01T23:59:59Z",
+          "location": "Singapore, SG",
+          "themes": ["fintech", "payments", "blockchain", "ai"],
+          "description": "Two-day in-person hackathon at Marina Bay Sands. SGD $30,000 in prizes.",
+          "organizer": "MAS x DBS"
+        },
+        {
+          "title": "Web3 Builder Weekend — Hong Kong",
+          "url": "https://lu.ma/web3-builder-hk-2026",
+          "registrationUrl": "https://lu.ma/web3-builder-hk-2026",
+          "startsAt": "2026-07-19T10:00:00Z",
+          "registrationClosesAt": "2026-07-15T23:59:59Z",
+          "location": "Hong Kong",
+          "themes": ["web3", "blockchain", "defi", "ai"],
+          "description": "Weekend hackathon hosted by Cyberport. HKD $100,000 in prizes + incubation.",
+          "organizer": "Cyberport Hong Kong"
+        },
+        {
+          "title": "Google Forms Demo Hackathon",
+          "url": "https://docs.google.com/forms/d/e/1FAIpQLSf_DEMO_FIXTURE/viewform",
+          "registrationUrl": "https://docs.google.com/forms/d/e/1FAIpQLSf_DEMO_FIXTURE/viewform",
+          "startsAt": "2026-07-25T09:00:00Z",
+          "registrationClosesAt": "2026-07-20T23:59:59Z",
+          "location": "Online",
+          "themes": ["ai", "education", "productivity"],
+          "description": "Fixture event using a Google Form for registration — used for PlaywrightRunner demo testing.",
+          "organizer": "EarlyBirds Demo"
+        }
+      ]
+    },
+    "grounding": [
+      {
+        "field": "events[0].title",
+        "citations": [{ "url": "https://devpost.com/hackathons/global-ai-2026", "title": "Global AI Hackathon 2026 — Devpost" }],
+        "confidence": "high"
+      },
+      {
+        "field": "events[1].registrationClosesAt",
+        "citations": [{ "url": "https://lu.ma/fintech-hack-sg-2026", "title": "FinTech Hack Singapore 2026 — Luma" }],
+        "confidence": "medium"
+      }
+    ]
+  }
+}

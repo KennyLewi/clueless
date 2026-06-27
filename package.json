@@ -1,0 +1,28 @@
+{
+  "name": "earlybirds",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "AI-powered hackathon discovery + auto-registration agent",
+  "workspaces": [
+    "packages/*",
+    "services/*"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev:gateway": "tsx watch services/gateway/src/server.ts",
+    "dev:worker": "tsx watch services/worker/src/worker.ts",
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "db:push": "prisma db push --schema=packages/db/prisma/schema.prisma",
+    "db:studio": "prisma studio --schema=packages/db/prisma/schema.prisma"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}
