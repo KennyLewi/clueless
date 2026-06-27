@@ -127,8 +127,8 @@ export const feedRoutes: FastifyPluginAsync = async (server) => {
   // (Dev only; cron routes are the production path.)
   server.post("/discover/trigger", {
     handler: async () => {
-      await discoveryQueue.add("run", { adapter: "exa" });
-      await discoveryQueue.add("run", { adapter: "luma" });
+      // Devpost-only for now: an Exa pass scoped to devpost.com (includeDomains).
+      await discoveryQueue.add("run", { adapter: "devpost" });
       return { queued: true };
     },
   });

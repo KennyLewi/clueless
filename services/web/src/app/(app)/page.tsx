@@ -7,7 +7,7 @@ import { currentUserId } from "@/lib/session";
 import { isClosingSoon, locationLabel } from "@/lib/format";
 import type { FeedEvent } from "@/lib/types";
 import { EventCard } from "@/components/EventCard";
-import { IconSearch } from "@/components/icons";
+import { IconSearch, Spinner } from "@/components/icons";
 
 const FILTERS: Array<[string, string]> = [
   ["all", "All"],
@@ -20,6 +20,7 @@ export default function FeedPage() {
   const [events, setEvents] = useState<FeedEvent[] | null>(null);
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
+  const [discovering, setDiscovering] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -31,6 +32,27 @@ export default function FeedPage() {
       alive = false;
     };
   }, []);
+
+  // Kick off an Exa discovery pass, then poll the feed until new events land
+  // (discovery → normalize → rank is async) or a timeout is reached.
+  const findNew = async () => {
+    if (discovering) return;
+    setDiscovering(true);
+    const before = events?.length ?? 0;
+    try {
+      await api.triggerDiscovery();
+      for (let i = 0; i < 12; i++) {
+        await new Promise((r) => setTimeout(r, 2500));
+        const fresh = await api.getFeed(currentUserId()).catch(() => null);
+        if (fresh) {
+          setEvents(fresh);
+          if (fresh.length > before) break;
+        }
+      }
+    } finally {
+      setDiscovering(false);
+    }
+  };
 
   const shown = useMemo(() => {
     if (!events) return [];
@@ -52,8 +74,21 @@ export default function FeedPage() {
 
   return (
     <div className="wrap">
-      <h1 className="page-title">Discover</h1>
-      <div className="page-sub">Ranked by fit to your profile. The agent can register you for any of these.</div>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
+        <div>
+          <h1 className="page-title">Discover</h1>
+          <div className="page-sub">Ranked by fit to your profile. The agent can register you for any of these.</div>
+        </div>
+        <button
+          className="btn btn-outline"
+          style={{ display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap", opacity: discovering ? 0.7 : 1 }}
+          onClick={findNew}
+          disabled={discovering}
+        >
+          {discovering ? <Spinner size={14} /> : null}
+          {discovering ? "Searching via Exa…" : "Find new events"}
+        </button>
+      </div>
 
       <div style={{ position: "relative", marginTop: 22 }}>
         <IconSearch />

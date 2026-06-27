@@ -36,6 +36,9 @@ export const mockApi: Api = {
     await delay(160);
     return { userId: DEMO_PROFILE.id, name: DEMO_PROFILE.name, email };
   },
+  async triggerDiscovery() {
+    await delay(400);
+  },
   async getFeed() {
     await delay(180);
     return FEED;

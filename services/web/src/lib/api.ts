@@ -27,6 +27,8 @@ export interface AuthResult {
 export interface Api {
   signup(name: string, email: string, password: string): Promise<AuthResult>;
   login(email: string, password: string): Promise<AuthResult>;
+  /** Kick off an Exa discovery pass (async; feed updates as results are ranked). */
+  triggerDiscovery(): Promise<void>;
   getFeed(userId: string): Promise<FeedEvent[]>;
   getEvent(id: string): Promise<Hackathon | null>;
   getProfile(id: string): Promise<UserProfile | null>;
@@ -43,9 +45,12 @@ export interface Api {
 }
 
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
+  // Only send a JSON content-type when there's a body — Fastify 400s on an empty
+  // body when content-type is application/json (affects bodyless POSTs).
+  const headers: Record<string, string> = init?.body ? { "content-type": "application/json" } : {};
   const res = await fetch(`${BASE}${path}`, {
-    headers: { "content-type": "application/json" },
     ...init,
+    headers: { ...headers, ...(init?.headers as Record<string, string> | undefined) },
   });
   if (!res.ok) throw new Error(`${init?.method ?? "GET"} ${path} → ${res.status}`);
   return res.json() as Promise<T>;
@@ -73,6 +78,9 @@ const realApi: Api = {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
+  },
+  async triggerDiscovery() {
+    await http(`/discover/trigger`, { method: "POST" });
   },
   async getFeed(userId) {
     const { events } = await http<{ events: FeedEvent[] }>(`/feed?userId=${encodeURIComponent(userId)}`);

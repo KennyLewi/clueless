@@ -140,8 +140,12 @@ export async function handleRank(job: Job<RankRecomputeJob>) {
     const user = await db.userProfile.findUnique({ where: { id: payload.userId } });
     if (!user) return { skipped: true };
 
+    // Include events with a future deadline OR no known deadline (Exa often can't
+    // extract one) — excluding null-deadline events would hide most discovered events.
     const hackathons = await db.hackathon.findMany({
-      where: { registrationClosesAt: { gte: new Date() } },
+      where: {
+        OR: [{ registrationClosesAt: null }, { registrationClosesAt: { gte: new Date() } }],
+      },
     });
 
     for (const hackathon of hackathons) {
