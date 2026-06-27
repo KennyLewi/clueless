@@ -11,6 +11,24 @@ import { db } from "@earlybirds/db";
 import { REDIS_URL } from "../config.js";
 import { SimulangRunner } from "../runners/simulang.js";
 
+// Resolves the URL the runner should actually open to find a fillable form.
+// Devpost's registration form lives at <landing>/register, so for *.devpost.com
+// landing pages we append /register unless an explicit form URL already points there.
+function resolveFormUrl(registrationFormUrl: string | null, landingUrl: string): string {
+  const base = registrationFormUrl ?? landingUrl;
+  try {
+    const u = new URL(base);
+    const isDevpost = u.hostname.endsWith("devpost.com");
+    if (isDevpost && !u.pathname.replace(/\/+$/, "").endsWith("/register")) {
+      u.pathname = `${u.pathname.replace(/\/+$/, "")}/register`;
+      return u.toString();
+    }
+  } catch {
+    // Not a parseable URL — return as-is.
+  }
+  return base;
+}
+
 export async function handleRegistration(job: Job<RegistrationRunJob>) {
   const { runId, phase } = job.data;
   const isSubmitPhase = phase === "submit";
@@ -60,7 +78,7 @@ export async function handleRegistration(job: Job<RegistrationRunJob>) {
     console.log(`[registration] run ${runId} status=${run.status} phase=${phase ?? "fill"}`);
 
     const runner = new SimulangRunner();
-    const formUrl = run.hackathon.registrationFormUrl ?? run.hackathon.url;
+    const formUrl = resolveFormUrl(run.hackathon.registrationFormUrl, run.hackathon.url);
 
     // ── Submit path (triggered after human approval via /approve) ─────────────
     if (run.status === "submitting") {
@@ -161,8 +179,15 @@ export async function handleRegistration(job: Job<RegistrationRunJob>) {
     const answers = run.user.formAnswers as Record<string, string>;
     const plannedActions: PlannedAction[] = fields
       .map((f): PlannedAction | null => {
-        const value = answers[f.canonicalName];
-        if (value) return { field: f.canonicalName, value, source: "profile" };
+        // Prefer a saved profile answer.
+        const fromProfile = answers[f.canonicalName];
+        if (fromProfile) return { field: f.canonicalName, value: fromProfile, source: "profile" };
+        // Otherwise apply a sensible default for required non-text fields so the
+        // agreement checkboxes / team-status radio Devpost requires still get filled.
+        if (f.type === "checkbox") return { field: f.canonicalName, value: "true", source: "default" };
+        if ((f.type === "radio" || f.type === "select") && f.options?.length) {
+          return { field: f.canonicalName, value: f.options[0]!, source: "default" };
+        }
         return null;
       })
       .filter((a): a is PlannedAction => a !== null);

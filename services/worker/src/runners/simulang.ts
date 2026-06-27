@@ -2,12 +2,15 @@ import {
   App,
   FocusPolicy,
   Visibility,
-  AccessibilityTree,
-  AccessibilityNode,
-  TraversalOrder,
-  AriaRole,
   Screen,
   screenshotFull,
+  GroundingModel,
+  MouseController,
+  KeyboardController,
+  Button,
+  Coordinate,
+  Direction,
+  Key,
   type Instance,
 } from "@simular-ai/simulang-js";
 import type {
@@ -21,53 +24,140 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-function toCanonical(label: string): string {
-  return label
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
+function isDevpost(url: string): boolean {
+  try {
+    return new URL(url).hostname.endsWith("devpost.com");
+  } catch {
+    return false;
+  }
 }
 
 function openChrome(url: string): Instance {
   const chrome = App.exactName("Google Chrome");
-  const instance = chrome.open(url, FocusPolicy.Steal, Visibility.Show, true);
-  instance.enableAccessibility();
-  return instance;
+  return chrome.open(url, FocusPolicy.Steal, Visibility.Show, true);
 }
+
+// Devpost's registration form is radios + required checkboxes + a Register button —
+// no text inputs. These are the fields the runner fills (vision-grounded by label).
+const DEVPOST_FIELDS: FormFieldSpec[] = [
+  {
+    canonicalName: "team_status",
+    label: "Do you have teammates?",
+    type: "radio",
+    options: ["Working solo", "Looking for teammates", "Already have a team"],
+    required: true,
+    confidence: 0.85,
+  },
+  {
+    canonicalName: "eligibility_agree",
+    label: "I have read and agree to the eligibility requirements for this hackathon",
+    type: "checkbox",
+    required: true,
+    confidence: 0.85,
+  },
+  {
+    canonicalName: "terms_agree",
+    label: "I have read and agree to the Official Rules and the Devpost Terms of Service",
+    type: "checkbox",
+    required: true,
+    confidence: 0.85,
+  },
+];
+
+// Generic profile fields for non-Devpost forms (e.g. Luma / Google Forms).
+const PROFILE_FIELDS: FormFieldSpec[] = [
+  { canonicalName: "full_name", label: "Full name", type: "text", required: true, confidence: 0.8 },
+  { canonicalName: "first_name", label: "First name", type: "text", required: false, confidence: 0.7 },
+  { canonicalName: "last_name", label: "Last name", type: "text", required: false, confidence: 0.7 },
+  { canonicalName: "email", label: "Email", type: "email", required: true, confidence: 0.8 },
+  { canonicalName: "school", label: "School", type: "text", required: false, confidence: 0.7 },
+  { canonicalName: "github", label: "GitHub", type: "text", required: false, confidence: 0.7 },
+];
+
+const SUBMIT_CONCEPT =
+  "the primary submit button at the bottom of this registration form, labeled Register, Submit, Join, or RSVP";
 
 export class SimulangRunner {
   readonly kind = "simulang" as const;
 
+  // Reuse one Chrome window across introspect → fill within a single job.
+  private _instance: Instance | null = null;
+  private _instanceUrl: string | null = null;
+
+  private _model: GroundingModel | null = null;
+  private _mouse: MouseController | null = null;
+  private _keyboard: KeyboardController | null = null;
+
+  private get model(): GroundingModel {
+    return (this._model ??= GroundingModel.default());
+  }
+  private get mouse(): MouseController {
+    return (this._mouse ??= new MouseController());
+  }
+  private get keyboard(): KeyboardController {
+    return (this._keyboard ??= new KeyboardController());
+  }
+
+  private openOrReuse(url: string): { instance: Instance; reused: boolean } {
+    if (this._instance && this._instanceUrl === url) {
+      return { instance: this._instance, reused: true };
+    }
+    const instance = openChrome(url);
+    this._instance = instance;
+    this._instanceUrl = url;
+    return { instance, reused: false };
+  }
+
+  private shot() {
+    return screenshotFull(false, Screen.mainScreen());
+  }
+
+  // Locate a concept on a fresh screenshot and click it. Returns false if grounding throws.
+  private async groundClick(concept: string): Promise<boolean> {
+    try {
+      const [x, y] = this.shot().ground(this.model, concept);
+      this.mouse.moveMouse(x, y, Coordinate.Abs);
+      await sleep(120);
+      this.mouse.button(Button.Left, Direction.Click);
+      await sleep(300);
+      return true;
+    } catch (err) {
+      console.warn(`[simulang] ground failed for "${concept}":`, err);
+      return false;
+    }
+  }
+
+  // Click a text field, select-all, and type the value (overwrites any prefill).
+  private async fillTextField(label: string, value: string): Promise<boolean> {
+    const ok = await this.groundClick(`the "${label}" text input field on the form`);
+    if (!ok) return false;
+    this.keyboard.key(Key.Meta, Direction.Press);
+    this.keyboard.key(Key.A, Direction.Click);
+    this.keyboard.key(Key.Meta, Direction.Release);
+    await sleep(80);
+    this.keyboard.text(value);
+    await sleep(200);
+    return true;
+  }
+
+  // Performs one planned action by field type. Returns true if it acted.
+  private async applyAction(spec: FormFieldSpec, action: PlannedAction): Promise<boolean> {
+    if (spec.type === "checkbox") {
+      // value "false"/"no" means leave unchecked; anything else → check it.
+      const want = !/^(false|no|0|off)$/i.test(action.value);
+      if (!want) return true;
+      return this.groundClick(`the checkbox for "${spec.label}"`);
+    }
+    if (spec.type === "radio" || spec.type === "select") {
+      return this.groundClick(`the "${action.value}" option under the question "${spec.label}"`);
+    }
+    return this.fillTextField(spec.label, action.value);
+  }
+
   async introspect(formUrl: string): Promise<FormFieldSpec[]> {
-    const instance = openChrome(formUrl);
-    await sleep(4000);
-
-    const tree = AccessibilityTree.fromPid(instance.pid);
-    const fields: FormFieldSpec[] = [];
-    const seen = new Set<string>();
-
-    const add = (nodes: ReturnType<typeof tree.find>, type: FormFieldSpec["type"]) => {
-      for (const n of nodes) {
-        if (!n.name) continue;
-        const canon = toCanonical(n.name);
-        if (!canon || seen.has(canon)) continue;
-        seen.add(canon);
-        fields.push({
-          canonicalName: canon,
-          label: n.name,
-          a11ySelector: n.name,
-          type,
-          required: false,
-          confidence: 0.75,
-        });
-      }
-    };
-
-    add(tree.find(TraversalOrder.DepthFirst, AriaRole.Textbox, null, false, 50, true), "text");
-    add(tree.find(TraversalOrder.DepthFirst, AriaRole.Checkbox, null, false, 20, true), "checkbox");
-    add(tree.find(TraversalOrder.DepthFirst, AriaRole.Combobox, null, false, 20, true), "select");
-
-    return fields;
+    const { reused } = this.openOrReuse(formUrl);
+    if (!reused) await sleep(5000); // let the SPA render
+    return isDevpost(formUrl) ? DEVPOST_FIELDS : PROFILE_FIELDS;
   }
 
   async fill(
@@ -76,13 +166,25 @@ export class SimulangRunner {
     knownFields: FormFieldSpec[],
     onEvent: (e: RegistrationProgressEvent) => void,
   ): Promise<{ screenshots: string[] }> {
-    const instance = openChrome(formUrl);
-    await sleep(4000);
+    const { reused } = this.openOrReuse(formUrl);
+    if (!reused) await sleep(5000);
 
-    await this._fillTree(instance, run.plannedActions, knownFields, onEvent);
+    const screenshots: string[] = [];
+    for (const action of run.plannedActions) {
+      const spec = knownFields.find((f) => f.canonicalName === action.field);
+      if (!spec) continue;
+      onEvent({ type: "field_filling", field: action.field, label: spec.label });
 
-    const shot = screenshotFull(false, Screen.mainScreen()).base64();
-    return { screenshots: [shot] };
+      const ok = await this.applyAction(spec, action);
+      if (ok) {
+        onEvent({ type: "field_filled", field: action.field, value: action.value, source: action.source });
+        screenshots.push(this.shot().base64());
+      } else {
+        console.warn(`[simulang] could not act on ${action.field} (${spec.label})`);
+      }
+    }
+
+    return { screenshots: screenshots.length ? screenshots : [this.shot().base64()] };
   }
 
   async submit(
@@ -91,128 +193,23 @@ export class SimulangRunner {
     knownFields: FormFieldSpec[],
     onEvent: (e: RegistrationProgressEvent) => void,
   ): Promise<{ finalScreenshot: string; confirmationCode?: string }> {
-    const instance = openChrome(formUrl);
-    await sleep(4000);
+    const { reused } = this.openOrReuse(formUrl);
+    if (!reused) await sleep(5000);
 
-    await this._fillTree(instance, run.plannedActions, knownFields, onEvent);
-
-    // Click the submit button — try known CTA labels in order.
-    const submitLabels = ["Submit", "Register", "RSVP", "Sign up", "Sign Up", "Apply", "Continue", "Join"];
-    let submitted = false;
-
-    for (const label of submitLabels) {
-      const tree = AccessibilityTree.fromPid(instance.pid);
-      const buttons = tree.find(TraversalOrder.DepthFirst, AriaRole.Button, label, false, 1, true);
-      const btn = buttons[0];
-      if (btn?.refId != null) {
-        tree.activate(btn.refId);
-        submitted = true;
-        break;
-      }
-    }
-
-    if (!submitted) {
-      // Fallback: scan all buttons for a submit-like label.
-      const tree = AccessibilityTree.fromPid(instance.pid);
-      const allButtons = tree.find(TraversalOrder.DepthFirst, AriaRole.Button, null, false, 30, true);
-      const cta = allButtons.find((b) => /submit|register|apply|rsvp|sign.?up|continue|join/i.test(b.name ?? ""));
-      if (cta?.refId != null) {
-        tree.activate(cta.refId);
-        submitted = true;
-      }
-    }
-
-    if (!submitted) {
-      console.warn("[simulang] submit: no submit button found");
-    }
-
-    await sleep(3000);
-
-    const finalShot = screenshotFull(false, Screen.mainScreen()).base64();
-
-    // Extract confirmation code from the post-submit accessibility snapshot.
-    let confirmationCode: string | undefined;
-    try {
-      const snap = AccessibilityNode.fromPid(instance.pid).snapshot();
-      const m = snap.match(
-        /(?:confirmation|reference|registration|booking|order)\s*(?:code|number|id|#|no\.?)?\s*[:\-–]?\s*([A-Z0-9][A-Z0-9\-]{2,})/i,
-      );
-      confirmationCode = m?.[1];
-    } catch (err) {
-      console.warn("[simulang] confirmation code extraction failed:", err);
-    }
-
-    return { finalScreenshot: finalShot, confirmationCode };
-  }
-
-  // Navigate to the form URL and fill each planned action via accessibility tree.
-  private async _fillTree(
-    instance: Instance,
-    actions: PlannedAction[],
-    knownFields: FormFieldSpec[],
-    onEvent: (e: RegistrationProgressEvent) => void,
-  ): Promise<void> {
-    for (const action of actions) {
+    // Re-apply every action (fresh window for the submit phase), then click submit.
+    for (const action of run.plannedActions) {
       const spec = knownFields.find((f) => f.canonicalName === action.field);
       if (!spec) continue;
-
       onEvent({ type: "field_filling", field: action.field, label: spec.label });
-
-      try {
-        // Re-query tree before every action — refIds invalidate on tree rebuild.
-        const tree = AccessibilityTree.fromPid(instance.pid);
-
-        // Find by exact label first; fall back to role-based scan filtered by canonical name.
-        let nodes = tree.find(TraversalOrder.DepthFirst, null, spec.label, false, 3, true);
-
-        if (nodes.length === 0) {
-          const role =
-            spec.type === "checkbox"
-              ? AriaRole.Checkbox
-              : spec.type === "select"
-                ? AriaRole.Combobox
-                : AriaRole.Textbox;
-          const candidates = tree.find(TraversalOrder.DepthFirst, role, null, false, 50, true);
-          const canon = toCanonical(spec.label);
-          nodes = candidates.filter((n) => {
-            const nc = toCanonical(n.name);
-            return nc.includes(canon) || canon.includes(nc);
-          });
-        }
-
-        const first = nodes[0];
-        if (first == null || first.refId == null) {
-          console.warn(`[simulang] could not locate field: ${action.field} (${spec.label})`);
-          continue;
-        }
-
-        const refId = first.refId;
-
-        if (spec.type === "checkbox") {
-          const isChecked =
-            first.value === "true" ||
-            first.value === "1" ||
-            first.value.toLowerCase() === "checked";
-          const wantChecked = action.value === "true";
-          if (isChecked !== wantChecked) tree.toggle(refId);
-        } else if (spec.type === "select") {
-          tree.expandCollapse(refId);
-          await sleep(300);
-          const tree2 = AccessibilityTree.fromPid(instance.pid);
-          const options = tree2.find(TraversalOrder.DepthFirst, AriaRole.Option, action.value, false, 5, true);
-          const firstOpt = options[0];
-          if (firstOpt?.refId != null) {
-            tree2.activate(firstOpt.refId);
-          }
-        } else {
-          tree.setValue(refId, action.value);
-        }
-
-        onEvent({ type: "field_filled", field: action.field, value: action.value, source: action.source });
-        await sleep(150);
-      } catch (err) {
-        console.warn(`[simulang] error filling ${action.field}:`, err);
-      }
+      const ok = await this.applyAction(spec, action);
+      if (ok) onEvent({ type: "field_filled", field: action.field, value: action.value, source: action.source });
     }
+
+    onEvent({ type: "step_started", step: "submitting", runner: "simulang" });
+    await this.groundClick(SUBMIT_CONCEPT);
+    await sleep(4000); // wait for the confirmation page to render
+
+    const finalScreenshot = this.shot().base64();
+    return { finalScreenshot };
   }
 }

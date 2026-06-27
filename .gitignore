@@ -12,3 +12,4 @@ packages/db/generated/
 .next/
 out/
 next-env.d.ts
+simulang-shots/
