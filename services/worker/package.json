@@ -14,8 +14,10 @@
     "exa-js": "2.14.0",
     "ioredis": "^5.4.1",
     "playwright": "^1.49.1",
-    "@simular-ai/simulang-js": "file:/Users/kenny/.nvm/versions/node/v26.1.0/lib/node_modules/@simular-ai/simulang/node_modules/@simular-ai/simulang-js",
     "dotenv": "^16.4.7"
+  },
+  "optionalDependencies": {
+    "@simular-ai/simulang-js": "file:/Users/kenny/.nvm/versions/node/v26.1.0/lib/node_modules/@simular-ai/simulang/node_modules/@simular-ai/simulang-js"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

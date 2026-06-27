@@ -9,7 +9,6 @@ import type {
 import { registrationEventChannel, TERMINAL_STATUSES } from "@earlybirds/contracts";
 import { db } from "@earlybirds/db";
 import { REDIS_URL } from "../config.js";
-import { SimulangRunner } from "../runners/simulang.js";
 
 // Resolves the URL the runner should actually open to find a fillable form.
 // Devpost's registration form lives at <landing>/register, so for *.devpost.com
@@ -76,6 +75,21 @@ export async function handleRegistration(job: Job<RegistrationRunJob>) {
     }
 
     console.log(`[registration] run ${runId} status=${run.status} phase=${phase ?? "fill"}`);
+
+    // Loaded lazily so the worker boots (and runs discovery/ranking) even when the
+    // native @simular-ai/simulang-js package isn't installed — it's an optional dep
+    // that only resolves in environments with simular-ai package access.
+    let SimulangRunner: typeof import("../runners/simulang.js").SimulangRunner;
+    try {
+      ({ SimulangRunner } = await import("../runners/simulang.js"));
+    } catch (err) {
+      console.error("[registration] Simulang runner unavailable:", err);
+      await fail(
+        isSubmitPhase ? "submitting" : "introspecting",
+        "Registration runner (Simulang) is not available in this environment.",
+      );
+      return { runId, status: "failed" };
+    }
 
     const runner = new SimulangRunner();
     const formUrl = resolveFormUrl(run.hackathon.registrationFormUrl, run.hackathon.url);
