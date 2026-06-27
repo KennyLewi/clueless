@@ -9,7 +9,7 @@ import type {
 import { registrationEventChannel, TERMINAL_STATUSES } from "@earlybirds/contracts";
 import { db } from "@earlybirds/db";
 import { REDIS_URL } from "../config.js";
-import { PlaywrightRunner } from "../runners/playwright.js";
+import { SimulangRunner } from "../runners/simulang.js";
 
 export async function handleRegistration(job: Job<RegistrationRunJob>) {
   const { runId, phase } = job.data;
@@ -30,7 +30,7 @@ export async function handleRegistration(job: Job<RegistrationRunJob>) {
       where: { id: runId },
       data: { status: "failed", errorStage: stage, errorMessage: message },
     });
-    await publish({ type: "step_started", step: `failed:${stage}`, runner: "playwright" });
+    await publish({ type: "status_changed", status: "failed", error: { stage, message } });
   };
 
   try {
@@ -59,7 +59,7 @@ export async function handleRegistration(job: Job<RegistrationRunJob>) {
 
     console.log(`[registration] run ${runId} status=${run.status} phase=${phase ?? "fill"}`);
 
-    const runner = new PlaywrightRunner();
+    const runner = new SimulangRunner();
     const formUrl = run.hackathon.registrationFormUrl ?? run.hackathon.url;
 
     // ── Submit path (triggered after human approval via /approve) ─────────────
@@ -88,13 +88,14 @@ export async function handleRegistration(job: Job<RegistrationRunJob>) {
       }
 
       let finalScreenshot = "";
+      let confirmationCode: string | undefined;
       try {
         const result = await runner.submit(
           {
             id: run.id,
             userId: run.userId,
             hackathonId: run.hackathonId,
-            runner: "playwright",
+            runner: "simulang",
             status: "submitting",
             plannedActions: run.plannedActions as unknown as PlannedAction[],
             artifacts: { screenshots: run.screenshots, finalScreenshot: run.finalScreenshot ?? undefined },
@@ -107,16 +108,32 @@ export async function handleRegistration(job: Job<RegistrationRunJob>) {
           publish,
         );
         finalScreenshot = result.finalScreenshot;
+        confirmationCode = result.confirmationCode;
       } catch (err) {
         await fail("submitting", String(err));
         return { runId, status: "failed" };
       }
 
-      await db.registrationRun.update({
-        where: { id: runId },
-        data: { status: "succeeded", finalScreenshot },
-      });
-      await publish({ type: "step_started", step: "succeeded", runner: "playwright" });
+      // Guard on status="submitting" — prevents a concurrent cancel from being overwritten.
+      let persistedOk = false;
+      try {
+        const updated = await db.registrationRun.updateMany({
+          where: { id: runId, status: "submitting" },
+          data: { status: "succeeded", finalScreenshot, confirmationCode },
+        });
+        persistedOk = updated.count > 0;
+      } catch (err) {
+        // DB error: best-effort fail; run may stay in submitting if DB is down.
+        await fail("persisting_result", String(err)).catch(() => {});
+        return { runId, status: "failed" };
+      }
+
+      if (!persistedOk) {
+        // Run was cancelled between the terminal guard and here; do not publish succeeded.
+        return { runId, status: "cancelled" };
+      }
+
+      await publish({ type: "status_changed", status: "succeeded", confirmationCode });
       return { runId, status: "succeeded" };
     }
 

@@ -26,6 +26,7 @@ export const FormFieldSpecSchema = z.object({
   required: z.boolean(),
   options: z.array(z.string()).optional(),
   confidence: z.number().min(0).max(1),
+  fillTier: z.enum(["profile", "structured", "generative"]).optional(),
 });
 
 export const HackathonSchema = z.object({
@@ -84,6 +85,9 @@ export const UserProfileSchema = z.object({
   willingToTravel: z.boolean(),
   travelRegions: z.array(z.string()).optional(),
   formAnswers: z.record(z.string()),
+  promptAnswers: z.record(z.string()).optional(),
+  writingSamples: z.array(z.object({ text: z.string(), purpose: z.literal("voice") })).optional(),
+  exploreOutsideLane: z.string().optional(),
 });
 
 export const RankedEventSchema = z.object({
@@ -97,7 +101,7 @@ export const RankedEventSchema = z.object({
 export const PlannedActionSchema = z.object({
   field: z.string(),
   value: z.string(),
-  source: z.enum(["profile", "default", "llm_inferred"]),
+  source: z.enum(["profile", "default", "llm_inferred", "llm_draft"]),
 });
 
 export const RegistrationRunSchema = z.object({

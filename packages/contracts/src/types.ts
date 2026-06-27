@@ -32,6 +32,7 @@ export interface FormFieldSpec {
   required: boolean;
   options?: string[];
   confidence: number; // 0..1
+  fillTier?: "profile" | "structured" | "generative";
 }
 
 export interface Hackathon {
@@ -91,6 +92,10 @@ export interface UserProfile {
   willingToTravel: boolean;
   travelRegions?: string[];
   formAnswers: Record<string, string>;
+  // Voice onboarding (§6.3.4)
+  promptAnswers?: Record<string, string>;
+  writingSamples?: { text: string; purpose: "voice" }[];
+  exploreOutsideLane?: string;
 }
 
 export interface RankedEvent {
@@ -117,7 +122,7 @@ export type RegistrationStatus =
 export interface PlannedAction {
   field: string; // canonicalName
   value: string;
-  source: "profile" | "default" | "llm_inferred";
+  source: "profile" | "default" | "llm_inferred" | "llm_draft";
 }
 
 export interface RegistrationRun {
@@ -128,6 +133,7 @@ export interface RegistrationRun {
   status: RegistrationStatus;
   plannedActions: PlannedAction[];
   artifacts: { screenshots: string[]; finalScreenshot?: string };
+  confirmationCode?: string;
   error?: { stage: string; message: string };
   createdAt: string;
   updatedAt: string;
@@ -140,7 +146,8 @@ export type RegistrationProgressEvent =
   | { type: "field_filled"; field: string; value: string; source: PlannedAction["source"] }
   | { type: "paused"; reason: "needs_input" | "captcha_encountered" | "oauth_redirect" }
   | { type: "awaiting_approval"; plannedActions: PlannedAction[] }
-  | { type: "screenshot"; url: string };
+  | { type: "screenshot"; url: string }
+  | { type: "status_changed"; status: RegistrationStatus; confirmationCode?: string; error?: { stage: string; message: string } };
 
 // ─── Service interfaces (frozen Day 0) ────────────────────────────────────────
 
@@ -153,7 +160,7 @@ export interface RegistrationRunner {
   kind: "playwright" | "simulang";
   introspect(formUrl: string): Promise<FormFieldSpec[]>;
   fill(run: RegistrationRun, onEvent: (e: RegistrationProgressEvent) => void): Promise<{ screenshots: string[] }>;
-  submit(run: RegistrationRun): Promise<{ finalScreenshot: string }>;
+  submit(run: RegistrationRun): Promise<{ finalScreenshot: string; confirmationCode?: string }>;
 }
 
 // Local bridge contract: earlybirds-desktop ↔ Gateway.

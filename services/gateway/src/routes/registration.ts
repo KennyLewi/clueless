@@ -12,6 +12,9 @@ export const registrationRoutes: FastifyPluginAsync = async (server) => {
     connection: { url: REDIS_URL },
   });
 
+  // Shared publisher for cancel SSE notifications — one connection, not one per request.
+  const pub = new Redis(REDIS_URL);
+
   // POST /registrations — create a new registration run and enqueue it.
   server.post<{ Body: { userId: string; hackathonId: string } }>("/", {
     schema: {
@@ -43,7 +46,7 @@ export const registrationRoutes: FastifyPluginAsync = async (server) => {
           id: runId,
           userId,
           hackathonId,
-          runner: "playwright",
+          runner: "simulang",
           status: "queued",
           plannedActions: [],
           resolvedFields: [],
@@ -59,7 +62,7 @@ export const registrationRoutes: FastifyPluginAsync = async (server) => {
           id: runId,
           userId,
           hackathonId,
-          runner: "playwright",
+          runner: "simulang",
           status: "queued",
           plannedActions: [],
           artifacts: { screenshots: [] },
@@ -108,7 +111,52 @@ export const registrationRoutes: FastifyPluginAsync = async (server) => {
         reply.status(409);
         return { error: `Run is already in terminal state '${run.status}'` };
       }
+      // Notify any open SSE stream so the client closes immediately.
+      await pub
+        .publish(
+          registrationEventChannel(id),
+          JSON.stringify({ type: "status_changed", status: "cancelled" }),
+        )
+        .catch(() => {});
       return { runId: id, cancelled: true };
+    },
+  });
+
+  // GET /registrations?userId= — list all runs for a user (feed "Registered" badges).
+  server.get<{ Querystring: { userId: string } }>("/", {
+    schema: {
+      querystring: {
+        type: "object",
+        required: ["userId"],
+        properties: { userId: { type: "string" } },
+      },
+    },
+    handler: async (req) => {
+      const { userId } = req.query;
+      const runs = await db.registrationRun.findMany({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+      });
+      return {
+        runs: runs.map((run) => ({
+          id: run.id,
+          userId: run.userId,
+          hackathonId: run.hackathonId,
+          runner: run.runner as RegistrationRun["runner"],
+          status: run.status as RegistrationRun["status"],
+          plannedActions: run.plannedActions as unknown as PlannedAction[],
+          artifacts: {
+            screenshots: run.screenshots,
+            finalScreenshot: run.finalScreenshot ?? undefined,
+          },
+          confirmationCode: run.confirmationCode ?? undefined,
+          error: run.errorStage
+            ? { stage: run.errorStage, message: run.errorMessage ?? "" }
+            : undefined,
+          createdAt: run.createdAt.toISOString(),
+          updatedAt: run.updatedAt.toISOString(),
+        })),
+      };
     },
   });
 
@@ -129,6 +177,7 @@ export const registrationRoutes: FastifyPluginAsync = async (server) => {
             screenshots: run.screenshots,
             finalScreenshot: run.finalScreenshot ?? undefined,
           },
+          confirmationCode: run.confirmationCode ?? undefined,
           error: run.errorStage
             ? { stage: run.errorStage, message: run.errorMessage ?? "" }
             : undefined,
@@ -181,8 +230,16 @@ export const registrationRoutes: FastifyPluginAsync = async (server) => {
 
       sub.on("message", (_ch, msg) => {
         try {
-          const event = JSON.parse(msg) as { type: string };
+          const event = JSON.parse(msg) as { type: string; status?: string };
           send(event.type, event);
+          // Close the SSE stream once a terminal status_changed arrives so the connection doesn't linger.
+          if (
+            event.type === "status_changed" &&
+            event.status &&
+            (TERMINAL_STATUSES as readonly string[]).includes(event.status)
+          ) {
+            cleanup();
+          }
         } catch {
           // Malformed publish — skip.
         }
@@ -202,7 +259,19 @@ export const registrationRoutes: FastifyPluginAsync = async (server) => {
           runId: id,
           status: run.status,
           plannedActions: run.plannedActions,
+          confirmationCode: run.confirmationCode ?? undefined,
+          error: run.errorStage
+            ? { stage: run.errorStage, message: run.errorMessage ?? "" }
+            : undefined,
         });
+
+        // Already terminal: no more Redis events will arrive, so close immediately.
+        // This also prevents the double-event race where a buffered status_changed
+        // fires after the snapshot is sent, producing two terminal events for the client.
+        if ((TERMINAL_STATUSES as readonly string[]).includes(run.status)) {
+          cleanup();
+          return;
+        }
       } catch (err) {
         console.error("[registration] SSE DB error:", err);
         send("error", { message: "Internal error reading run state" });

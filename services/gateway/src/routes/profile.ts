@@ -21,35 +21,27 @@ export const profileRoutes: FastifyPluginAsync = async (server) => {
       }
       const p = result.data;
 
+      const profileData = {
+        name: p.name,
+        email: p.email,
+        school: p.school,
+        resumeUrl: p.resumeUrl,
+        skills: p.skills,
+        interests: p.interests,
+        locationCity: p.locationBase?.city,
+        locationCountry: p.locationBase?.country,
+        willingToTravel: p.willingToTravel,
+        travelRegions: p.travelRegions ?? [],
+        formAnswers: p.formAnswers,
+        promptAnswers: p.promptAnswers ?? {},
+        writingSamples: (p.writingSamples ?? []) as object[],
+        exploreOutsideLane: p.exploreOutsideLane,
+      };
+
       await db.userProfile.upsert({
         where: { id: p.id },
-        create: {
-          id: p.id,
-          name: p.name,
-          email: p.email,
-          school: p.school,
-          resumeUrl: p.resumeUrl,
-          skills: p.skills,
-          interests: p.interests,
-          locationCity: p.locationBase?.city,
-          locationCountry: p.locationBase?.country,
-          willingToTravel: p.willingToTravel,
-          travelRegions: p.travelRegions ?? [],
-          formAnswers: p.formAnswers,
-        },
-        update: {
-          name: p.name,
-          email: p.email,
-          school: p.school,
-          resumeUrl: p.resumeUrl,
-          skills: p.skills,
-          interests: p.interests,
-          locationCity: p.locationBase?.city,
-          locationCountry: p.locationBase?.country,
-          willingToTravel: p.willingToTravel,
-          travelRegions: p.travelRegions ?? [],
-          formAnswers: p.formAnswers,
-        },
+        create: { id: p.id, ...profileData },
+        update: profileData,
       });
 
       await rankQueue.add("recompute", { kind: "user", userId: p.id });
@@ -82,6 +74,9 @@ export const profileRoutes: FastifyPluginAsync = async (server) => {
           willingToTravel: user.willingToTravel,
           travelRegions: user.travelRegions,
           formAnswers: user.formAnswers as Record<string, string>,
+          promptAnswers: user.promptAnswers as Record<string, string>,
+          writingSamples: user.writingSamples as { text: string; purpose: "voice" }[],
+          exploreOutsideLane: user.exploreOutsideLane ?? undefined,
         },
       };
     },

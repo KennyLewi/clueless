@@ -52,9 +52,13 @@ model UserProfile {
   locationCountry String?
   willingToTravel Boolean  @default(false)
   travelRegions   String[]
-  formAnswers     Json     @default("{}") // Record<string, string>
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  formAnswers        Json     @default("{}") // Record<string, string>
+  promptAnswers      Json     @default("{}") // Record<string, string> — voice onboarding §6.3.4
+  writingSamples     Json     @default("[]") // { text: string; purpose: "voice" }[]
+  exploreOutsideLane String?                 // ranking exploration boost §5.3
+  passwordHash       String?                 // bcrypt hash; null for seeded/test users
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   rankedEvents     RankedEvent[]
   registrationRuns RegistrationRun[]
@@ -86,6 +90,7 @@ model RegistrationRun {
   resolvedFields  Json     @default("[]") // FormFieldSpec[] — playwright-derived, stored at fill time for submit reuse
   screenshots     String[]
   finalScreenshot String?
+  confirmationCode String?
   errorStage      String?
   errorMessage    String?
   createdAt       DateTime @default(now())

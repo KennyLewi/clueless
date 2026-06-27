@@ -6,6 +6,7 @@ import { feedRoutes } from "./routes/feed.js";
 import { registrationRoutes } from "./routes/registration.js";
 import { profileRoutes } from "./routes/profile.js";
 import { cronRoutes } from "./routes/cron.js";
+import { authRoutes } from "./routes/auth.js";
 
 const server = Fastify({ logger: true });
 
@@ -24,6 +25,7 @@ await server.register(cors, {
 await server.register(feedRoutes);
 await server.register(registrationRoutes, { prefix: "/registrations" });
 await server.register(profileRoutes, { prefix: "/profile" });
+await server.register(authRoutes, { prefix: "/auth" });
 await server.register(cronRoutes, { prefix: "/internal/cron" });
 
 server.get("/health", async () => ({ ok: true }));
