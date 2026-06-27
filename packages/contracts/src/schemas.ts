@@ -69,6 +69,7 @@ export const RawListingSchema = z.object({
   fields: z.record(z.unknown()),
   rawPayloadRef: z.string(),
   scrapedAt: z.string().datetime(),
+  exaGrounding: z.array(ExaGroundingSchema).optional(),
 });
 
 export const UserProfileSchema = z.object({

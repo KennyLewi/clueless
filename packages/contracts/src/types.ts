@@ -76,6 +76,7 @@ export interface RawListing {
   fields: Record<string, unknown>; // Exa structured output; normalizer maps these
   rawPayloadRef: string;
   scrapedAt: string;
+  exaGrounding?: ExaGrounding[]; // per-event grounding from Exa deep search
 }
 
 export interface UserProfile {

@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { Exa, type DeepObjectOutputSchema } from "exa-js";
 import { EXA_OUTPUT_SCHEMA } from "@earlybirds/contracts";
-import type { SourceAdapter, RawListing } from "@earlybirds/contracts";
+import type { SourceAdapter, RawListing, ExaGrounding } from "@earlybirds/contracts";
 
 const FIXTURE_PATH = new URL("../../../../fixtures/exa-response.json", import.meta.url);
 
@@ -20,10 +20,16 @@ interface ExaOutputContent {
   }>;
 }
 
+interface ExaResult {
+  content: ExaOutputContent | undefined;
+  grounding: ExaGrounding[];
+}
+
 // Fixture type matches the live SearchResponse shape.
 interface ExaFixture {
   output?: {
     content?: ExaOutputContent;
+    grounding?: ExaGrounding[];
   };
 }
 
@@ -49,14 +55,14 @@ export class ExaAdapter implements SourceAdapter {
   }
 
   async discover(_cursor?: string): Promise<{ listings: RawListing[]; nextCursor?: string }> {
-    const content = this.useFixture
+    const { content, grounding } = this.useFixture
       ? await this.loadFixtureContent()
       : await this.fetchFromExa();
 
     const events = content?.events ?? [];
     const now = new Date().toISOString();
 
-    const listings: RawListing[] = events.map((event) => ({
+    const listings: RawListing[] = events.map((event, i) => ({
       source: "exa" as const,
       rawUrl: event.url,
       title: event.title,
@@ -71,12 +77,14 @@ export class ExaAdapter implements SourceAdapter {
       },
       rawPayloadRef: `exa:${crypto.createHash("sha1").update(event.url).digest("hex")}`,
       scrapedAt: now,
+      // Exa grounding entries reference events by index: "events[0].title", "events[1].url", etc.
+      exaGrounding: grounding.filter((g) => g.field.startsWith(`events[${i}]`)),
     }));
 
     return { listings };
   }
 
-  private async fetchFromExa(): Promise<ExaOutputContent | undefined> {
+  private async fetchFromExa(): Promise<ExaResult> {
     const results = await this.client!.search(
       "upcoming hackathons open for registration AI fintech blockchain 2026",
       {
@@ -90,13 +98,24 @@ export class ExaAdapter implements SourceAdapter {
       },
     );
 
-    return results.output?.content as ExaOutputContent | undefined;
+    const output = results.output;
+    return {
+      content: output?.content as ExaOutputContent | undefined,
+      grounding: (output?.grounding ?? []).map((g) => ({
+        field: g.field,
+        citations: g.citations,
+        confidence: g.confidence,
+      })),
+    };
   }
 
-  private async loadFixtureContent(): Promise<ExaOutputContent | undefined> {
+  private async loadFixtureContent(): Promise<ExaResult> {
     const { readFile } = await import("node:fs/promises");
     const raw = await readFile(FIXTURE_PATH, "utf-8");
     const fixture = JSON.parse(raw) as ExaFixture;
-    return fixture.output?.content;
+    return {
+      content: fixture.output?.content,
+      grounding: fixture.output?.grounding ?? [],
+    };
   }
 }

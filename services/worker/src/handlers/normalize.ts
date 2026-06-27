@@ -43,6 +43,7 @@ export async function handleNormalize(job: Job<NormalizeListingJob>) {
     rawUrl: listing.rawUrl,
     scrapedAt: listing.scrapedAt,
     rawPayloadRef: listing.rawPayloadRef,
+    ...(listing.exaGrounding?.length ? { exaGrounding: listing.exaGrounding } : {}),
   };
 
   type StoredSource = { source: string; rawUrl: string; scrapedAt: string };
@@ -88,7 +89,7 @@ export async function handleNormalize(job: Job<NormalizeListingJob>) {
         id: hackathonId,
         url: listing.rawUrl,
         registrationProvider: "unknown",
-        sources: [source],
+        sources: [source] as object[],
         ...sharedFields,
       },
       update: {
