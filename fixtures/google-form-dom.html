@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<!--
+  Recorded Google Form DOM for offline PlaywrightRunner dev/testing.
+  Source: a real Google Form registration page (fields anonymized).
+  Replace with a live capture from the actual demo form before judging.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hackathon Registration — Demo Form</title>
+</head>
+<body>
+  <form id="registration-form" action="#" method="post">
+    <h1>Hackathon Registration</h1>
+
+    <!-- Full name -->
+    <div class="form-group" data-canonical="full_name">
+      <label for="entry.1000001">Full Name *</label>
+      <input type="text" id="entry.1000001" name="entry.1000001" required
+             aria-label="Full Name" placeholder="Jane Smith" />
+    </div>
+
+    <!-- Email -->
+    <div class="form-group" data-canonical="email">
+      <label for="entry.1000002">Email Address *</label>
+      <input type="email" id="entry.1000002" name="entry.1000002" required
+             aria-label="Email Address" placeholder="jane@example.com" />
+    </div>
+
+    <!-- School / Organization -->
+    <div class="form-group" data-canonical="school">
+      <label for="entry.1000003">School / Organization *</label>
+      <input type="text" id="entry.1000003" name="entry.1000003" required
+             aria-label="School or Organization" placeholder="National University of Singapore" />
+    </div>
+
+    <!-- GitHub URL -->
+    <div class="form-group" data-canonical="github">
+      <label for="entry.1000004">GitHub Profile URL</label>
+      <input type="url" id="entry.1000004" name="entry.1000004"
+             aria-label="GitHub Profile URL" placeholder="https://github.com/username" />
+    </div>
+
+    <!-- Team name -->
+    <div class="form-group" data-canonical="team_name">
+      <label for="entry.1000005">Team Name</label>
+      <input type="text" id="entry.1000005" name="entry.1000005"
+             aria-label="Team Name" placeholder="Team Awesome" />
+    </div>
+
+    <!-- Track / Theme -->
+    <div class="form-group" data-canonical="track">
+      <label for="entry.1000006">Preferred Track *</label>
+      <select id="entry.1000006" name="entry.1000006" required aria-label="Preferred Track">
+        <option value="">-- Select a track --</option>
+        <option value="ai">Artificial Intelligence</option>
+        <option value="fintech">FinTech</option>
+        <option value="sustainability">Sustainability</option>
+        <option value="web3">Web3 / Blockchain</option>
+        <option value="health">HealthTech</option>
+      </select>
+    </div>
+
+    <!-- T-shirt size -->
+    <div class="form-group" data-canonical="tshirt_size">
+      <label>T-Shirt Size</label>
+      <div role="radiogroup" aria-label="T-Shirt Size">
+        <label><input type="radio" name="entry.1000007" value="S" /> S</label>
+        <label><input type="radio" name="entry.1000007" value="M" /> M</label>
+        <label><input type="radio" name="entry.1000007" value="L" /> L</label>
+        <label><input type="radio" name="entry.1000007" value="XL" /> XL</label>
+      </div>
+    </div>
+
+    <!-- Dietary requirements -->
+    <div class="form-group" data-canonical="dietary">
+      <label for="entry.1000008">Dietary Requirements</label>
+      <input type="text" id="entry.1000008" name="entry.1000008"
+             aria-label="Dietary Requirements" placeholder="e.g. vegetarian, halal, none" />
+    </div>
+
+    <!-- Resume upload -->
+    <div class="form-group" data-canonical="resume">
+      <label for="entry.1000009">Upload Resume (PDF)</label>
+      <input type="file" id="entry.1000009" name="entry.1000009"
+             accept=".pdf" aria-label="Upload Resume" />
+    </div>
+
+    <!-- How did you hear about us -->
+    <div class="form-group" data-canonical="referral_source">
+      <label for="entry.1000010">How did you hear about us?</label>
+      <textarea id="entry.1000010" name="entry.1000010" rows="2"
+                aria-label="How did you hear about us"></textarea>
+    </div>
+
+    <!-- Agreement checkbox -->
+    <div class="form-group" data-canonical="agree_terms">
+      <label>
+        <input type="checkbox" id="entry.1000011" name="entry.1000011" value="true" required
+               aria-label="I agree to the terms and conditions" />
+        I agree to the <a href="#">terms and conditions</a> *
+      </label>
+    </div>
+
+    <button type="submit" id="submit-btn" aria-label="Submit registration">
+      Submit Registration
+    </button>
+  </form>
+</body>
+</html>
