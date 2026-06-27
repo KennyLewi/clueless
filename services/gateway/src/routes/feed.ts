@@ -92,7 +92,15 @@ export const feedRoutes: FastifyPluginAsync = async (server) => {
     handler: async (req) => {
       const { userId } = req.query;
       const ranked = await db.rankedEvent.findMany({
-        where: { userId },
+        where: {
+          userId,
+          hackathon: {
+            OR: [
+              { registrationClosesAt: { gte: new Date() } },
+              { registrationClosesAt: null },
+            ],
+          },
+        },
         orderBy: { score: "desc" },
         include: { hackathon: true },
       });
