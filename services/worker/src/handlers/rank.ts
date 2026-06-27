@@ -2,8 +2,7 @@ import type { Job } from "bullmq";
 import { Queue } from "bullmq";
 import { QUEUE_NAMES } from "@earlybirds/contracts";
 import type { RankRecomputeJob, NotifyEnqueueJob } from "@earlybirds/contracts";
-
-const REDIS_URL = process.env["REDIS_URL"] ?? "redis://localhost:6379";
+import { REDIS_URL } from "../config.js";
 
 const notifyQueue = new Queue<NotifyEnqueueJob>(QUEUE_NAMES.NOTIFY_ENQUEUE, {
   connection: { url: REDIS_URL },

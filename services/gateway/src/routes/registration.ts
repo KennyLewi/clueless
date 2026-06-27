@@ -1,11 +1,13 @@
 import type { FastifyPluginAsync } from "fastify";
 import { Queue } from "bullmq";
 import { QUEUE_NAMES } from "@earlybirds/contracts";
-import type { RegistrationRunJob } from "@earlybirds/contracts";
-import type { RegistrationRun } from "@earlybirds/contracts";
+import type { RegistrationRunJob, RegistrationRun, RegistrationStatus } from "@earlybirds/contracts";
+import { REDIS_URL } from "../config.js";
 import crypto from "node:crypto";
 
-const REDIS_URL = process.env["REDIS_URL"] ?? "redis://localhost:6379";
+// In-memory stub store — replaced by DB in M1.
+// Key: runId, Value: RegistrationRun
+const runStore = new Map<string, RegistrationRun>();
 
 // POST /registrations — kick off a registration run.
 // POST /registrations/:id/approve — approve the planned actions and submit.
@@ -31,12 +33,11 @@ export const registrationRoutes: FastifyPluginAsync = async (server) => {
       const runId = crypto.randomUUID();
       const now = new Date().toISOString();
 
-      // Stub: create a skeleton run record (M1: persist to DB)
       const run: RegistrationRun = {
         id: runId,
         userId,
         hackathonId,
-        runner: "playwright", // default; registration svc picks based on provider
+        runner: "playwright", // registration svc picks based on provider in M2
         status: "queued",
         plannedActions: [],
         artifacts: { screenshots: [] },
@@ -44,6 +45,7 @@ export const registrationRoutes: FastifyPluginAsync = async (server) => {
         updatedAt: now,
       };
 
+      runStore.set(runId, run);
       await queue.add("run", { runId });
       reply.status(202);
       return { run };
@@ -51,9 +53,26 @@ export const registrationRoutes: FastifyPluginAsync = async (server) => {
   });
 
   server.post<{ Params: { id: string } }>("/:id/approve", {
-    handler: async (req) => {
+    handler: async (req, reply) => {
       const { id } = req.params;
-      // TODO(M2): validate run is in awaiting_approval, transition to submitting
+
+      // State guard: only allow approval when the run is waiting for it.
+      // TODO(M1): replace runStore lookup with DB fetch.
+      const run = runStore.get(id);
+      if (!run) {
+        reply.status(404);
+        return { error: "Run not found" };
+      }
+      if (run.status !== "awaiting_approval") {
+        reply.status(409);
+        return {
+          error: `Cannot approve a run in status '${run.status}' — must be 'awaiting_approval'`,
+        };
+      }
+
+      run.status = "submitting";
+      run.updatedAt = new Date().toISOString();
+      // TODO(M2): enqueue the actual submit step and stream progress back
       return { runId: id, accepted: true };
     },
   });
@@ -61,23 +80,29 @@ export const registrationRoutes: FastifyPluginAsync = async (server) => {
   server.get<{ Params: { id: string } }>("/:id/stream", {
     handler: async (req, reply) => {
       const { id } = req.params;
-      // SSE for real-time progress
+
+      // Hijack the connection before touching reply.raw — prevents Fastify from
+      // terminating the response when this async handler returns.
+      reply.hijack();
+
       reply.raw.setHeader("Content-Type", "text/event-stream");
       reply.raw.setHeader("Cache-Control", "no-cache");
       reply.raw.setHeader("Connection", "keep-alive");
+      reply.raw.flushHeaders();
 
       const send = (event: string, data: unknown) => {
         reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
       };
 
+      const run = runStore.get(id);
+      send("status", { runId: id, status: run?.status ?? "unknown" });
+
       // TODO(M2): subscribe to run status updates from BullMQ / Redis pub-sub
-      send("status", { runId: id, status: "queued" });
+      //           and call send() on each transition.
 
       req.socket.on("close", () => {
         reply.raw.end();
       });
-
-      await reply;
     },
   });
 };

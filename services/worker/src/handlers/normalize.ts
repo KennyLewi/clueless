@@ -1,9 +1,9 @@
+import crypto from "node:crypto";
 import type { Job } from "bullmq";
 import { Queue } from "bullmq";
 import { QUEUE_NAMES } from "@earlybirds/contracts";
 import type { NormalizeListingJob, RankRecomputeJob, FormIntrospectJob } from "@earlybirds/contracts";
-
-const REDIS_URL = process.env["REDIS_URL"] ?? "redis://localhost:6379";
+import { REDIS_URL } from "../config.js";
 
 const rankQueue = new Queue<RankRecomputeJob>(QUEUE_NAMES.RANK_RECOMPUTE, {
   connection: { url: REDIS_URL },
@@ -19,8 +19,15 @@ export async function handleNormalize(job: Job<NormalizeListingJob>) {
   const listing = job.data;
   console.log(`[normalize] processing: ${listing.title}`);
 
+  // Deterministic ID from the canonical URL — ensures the same event upserts
+  // rather than inserting a new row on every discovery pass.
+  const hackathonId = crypto
+    .createHash("sha256")
+    .update(listing.rawUrl)
+    .digest("hex")
+    .slice(0, 24);
+
   // TODO(M1): LLM normalization pass + DB upsert + dedup
-  const hackathonId = `stub-${Date.now()}`;
 
   await rankQueue.add("recompute", { kind: "hackathon", hackathonId });
 

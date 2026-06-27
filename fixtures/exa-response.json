@@ -3,8 +3,7 @@
   "requestedAt": "2026-06-27T00:00:00Z",
   "query": "upcoming hackathons open for registration AI fintech blockchain 2026",
   "output": {
-    "content": {
-      "events": [
+    "events": [
         {
           "title": "Global AI Hackathon 2026",
           "url": "https://devpost.com/hackathons/global-ai-2026",
@@ -57,7 +56,6 @@
           "organizer": "EarlyBirds Demo",
           "prizes": "Demo only"
         }
-      ]
-    }
+    ]
   }
 }

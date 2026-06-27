@@ -1,35 +1,10 @@
-import "dotenv/config";
+import "./config.js"; // load dotenv + validate env vars at boot
 import Fastify from "fastify";
-import { Queue } from "bullmq";
-import { QUEUE_NAMES } from "@earlybirds/contracts";
-import type {
-  DiscoveryRunJob,
-  RegistrationRunJob,
-  NotifyEnqueueJob,
-} from "@earlybirds/contracts";
-import type {
-  UserProfile,
-  RegistrationRun,
-} from "@earlybirds/contracts";
+import { PORT } from "./config.js";
 import { feedRoutes } from "./routes/feed.js";
 import { registrationRoutes } from "./routes/registration.js";
 import { profileRoutes } from "./routes/profile.js";
 import { cronRoutes } from "./routes/cron.js";
-
-const PORT = Number(process.env["PORT"] ?? 3001);
-const REDIS_URL = process.env["REDIS_URL"] ?? "redis://localhost:6379";
-
-export const discoveryQueue = new Queue<DiscoveryRunJob>(QUEUE_NAMES.DISCOVERY_RUN, {
-  connection: { url: REDIS_URL },
-});
-
-export const registrationQueue = new Queue<RegistrationRunJob>(QUEUE_NAMES.REGISTRATION_RUN, {
-  connection: { url: REDIS_URL },
-});
-
-export const notifyQueue = new Queue<NotifyEnqueueJob>(QUEUE_NAMES.NOTIFY_ENQUEUE, {
-  connection: { url: REDIS_URL },
-});
 
 const server = Fastify({ logger: true });
 
