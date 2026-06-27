@@ -320,7 +320,10 @@ Adapters (in priority order):
    spanning Devpost, Luma, university pages, and the open web in one pass. Build first; it carries discovery.
 2. **DevpostAdapter** — optional precision pass: query Exa with `includeDomains: ["devpost.com"]`
    (or hit Devpost directly) for high-confidence structured records on the demo-critical source.
-3. **LumaAdapter** — `includeDomains: ["lu.ma"]` Exa pass for lu.ma-hosted events.
+3. **LumaAdapter** — `includeDomains: ["lu.ma"]` Exa pass for lu.ma-hosted events. Luma is also our
+   **preferred registration demo target** (verified): RSVP needs only **name + email, no forced login**,
+   and the form layout is consistent across events — so the runner is rock-solid on it. *Avoid*
+   approval-gated or crypto/token-gated Luma events (some require wallet verification or host approval).
 
 We **drop hand-rolled scraping and the LinkedIn adapter** from the plan: Exa already crawls the
 open web (including content surfaced from LinkedIn posts) without the ToS/auth/brittleness risk,
@@ -388,12 +391,31 @@ interface RegistrationRunner {
 ```
 
 - **SimulangRunner (sponsor headline)** — drives a **real, visible browser** via `@simular-ai/simulang-js`
-  (accessibility tree + mouse/keyboard). This is the **demo money shot**: the judge watches the agent
-  physically navigate and fill the form. Also our answer to sites that block headless automation.
-  Simulang notes that matter for correctness: a11y `refId`s invalidate on every tree rebuild, so the
-  runner re-resolves selectors per step (never caches a `refId` across `snapshot()`); `AriaRole` is a
-  numeric enum (use `ariaRoleToString`); `App.open` focus/visibility are advisory. Needs
-  `OPENROUTER_API_KEY` for grounding when it falls back to vision.
+  (pinned `6.0.1`, verified locally). This is the **demo money shot**: the judge watches the agent
+  physically navigate and fill the form. The actual API the runner uses:
+
+  ```ts
+  import { App, FocusPolicy, Visibility, TraversalOrder, ariaRoleToString } from '@simular-ai/simulang-js'
+
+  // 1. Open the registration page in a real Chrome window.
+  const inst = App.exactName('Google Chrome').open(formUrl, FocusPolicy.Steal, Visibility.Show, true);
+  inst.enableAccessibility();                 // Chrome ships a11y off by default
+
+  // 2. For each FormFieldSpec, locate the control by *concept text* (robust to DOM churn).
+  const [node] = inst.scoredSearch(TraversalOrder.BreadthFirst, 50_000, false, field.label, 0.75);
+
+  // 3. Act on it. Calls are SYNCHRONOUS (napi-rs) — try/catch, no await on native calls.
+  node.setValue(value);                       // text/email/textarea
+  node.activate();                            // buttons / checkboxes / submit
+  ```
+
+  Correctness notes verified from the shipped `CLAUDE.md` / `index.d.ts`: native calls are
+  **synchronous** (errors throw, no Promises); re-run `scoredSearch` per step rather than caching
+  nodes across tree rebuilds; `AriaRole` is numeric (use `ariaRoleToString`); coordinates are physical
+  pixels; `App.open` focus/visibility are advisory. The **concept-text search** (`scoredSearch`) is the
+  key win — we match fields by their human label ("Full name", "GitHub URL") instead of brittle
+  selectors, so the same runner generalizes across unfamiliar forms. Needs `OPENROUTER_API_KEY` only
+  if it falls back to a VLM for grounding.
 - **PlaywrightRunner** — the reliable workhorse. Fast, scriptable, headless, great for
   Devpost/Luma/Google Forms. Used for the bulk of forms and as the deterministic fallback if a
   live Simulang run gets flaky during judging.
@@ -406,9 +428,9 @@ and keep Playwright as the safety net. Both develop in parallel behind the one i
 
 - Computes countdowns from `registrationClosesAt`.
 - Emits reminders at T-7d / T-2d / T-12h thresholds, plus a "new match found" push.
-- **Delivery uses Zo Computer's channels** — Telegram / SMS / email — so the user gets pinged on
-  their phone with zero extra infra to build. Notify enqueues a `notify` job; a Zo-hosted task
-  delivers it. This is what makes "smart reminders" real rather than an in-app badge nobody sees.
+- Maintains a `pending_notifications` table; the service's job is only to *decide what's worth
+  sending* and write a row. **Actual delivery is handed to Zo** (Telegram / SMS / email / Slack /
+  Discord), so we build zero notification infrastructure (see §5.7 for the exact mechanism).
 - Re-fires when a dedup/change event moves a deadline.
 
 ### 5.6 Trip planning (stretch) — *Exa for logistics*
@@ -419,17 +441,119 @@ and keep Playwright as the safety net. Both develop in parallel behind the one i
   booking search with prefilled dates/airports.
 - Demo-friendly minimum: a "Register + here's your flight window" card. No booking, just search.
 
-### 5.7 Always-on runtime — *Zo Computer*
+### 5.7 Always-on runtime — *Zo Computer* (verified mechanics)
 
-The whole backend is hosted on a **Zo Computer** instance, which turns "continuous discovery"
-from a slide claim into a real system property:
+Zo turns "continuous discovery" from a slide claim into a real system property. Based on Zo's
+actual primitives (Services, Sites, Automations, Secrets, MCP), here's exactly how we use each —
+and, importantly, the **division of labor**: our code owns deterministic logic; Zo owns
+hosting, scheduling, and delivery.
 
-- **Persistent Linux server + storage** hosts Postgres, Redis/BullMQ, the workers, and screenshot artifacts.
-- **Scheduled tasks** fire the Exa discovery cron and the deadline-sweep for Notify on an interval —
-  running even when every teammate's laptop is closed.
-- **Delivery** of reminders over Telegram / SMS / email (see §5.5).
-- **MCP server** connects our Cursor agents directly to the Zo box during development, so agents can
-  read/write project files, run shell commands, and inspect live state while building.
+| Zo primitive | What it is | How EarlyBirds uses it |
+|---|---|---|
+| **Services** | Long-running processes on your Zo Linux box, with permanent HTTPS URLs, auto-restart, custom domains | Hosts the **API gateway + BullMQ workers + Postgres + Redis** as `process`-mode services (`node dist/server.js`, `node dist/worker.js`). This is the always-on backend. |
+| **Sites** | Static / app hosting on `*.zo.space` / `zocomputer.io` | Hosts the **Next.js frontend** — the public demo URL. |
+| **Automations** | An *AI prompt run on a schedule* (RFC-5545 RRULE) by a Zo instance with all its tools, with an optional `delivery_method` | The **discovery cron** and the **deadline sweep**. The automation doesn't reimplement our logic — it **calls our service endpoint** and lets Zo deliver the result. |
+| **Secrets** | `Settings > Advanced`, never shown in chat | `EXA_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, DB creds. |
+| **MCP server** | Connects Cursor / Codex / Claude Code to the Zo box | Our Cursor agents read/write project files, run shell, and inspect live runtime state while building. Zo can also orchestrate Codex CLI headless. |
+
+**Key design decision — keep logic in our service, not in the automation prompt.** Zo automations
+are non-deterministic LLM runs (and metered). So the automation stays dumb and reliable: it just
+hits an internal endpoint and conditionally notifies. Example automation we create on Zo:
+
+> **Schedule:** `RRULE:FREQ=HOURLY;INTERVAL=6`
+> **Instruction:** "POST `https://earlybirds.<our>.zo.space/internal/cron/discover`. It returns
+> JSON `{ newMatches: number, digest: string }`. If `newMatches > 0`, send me the `digest` over
+> Telegram. Otherwise do nothing."
+> **delivery_method:** `telegram`
+
+This gives us a **conditional-notification** pattern (Zo's recommended idiom — "ping me only when
+something's true") with our deterministic Exa+rank+dedup pipeline doing the real work behind the
+endpoint. Same pattern for the deadline sweep (`/internal/cron/deadlines`).
+
+So Zo is doing three concrete jobs: **(1) hosting** the whole stack with a real URL, **(2) firing**
+the discovery/deadline schedules with no laptop open, and **(3) delivering** notifications to the
+user's phone — none of which we'd otherwise get for free on a hackathon timeline.
+
+---
+
+## 5.8 Service integration & end-to-end data flow
+
+The services never call each other's internals — they integrate through **two seams only**:
+(1) a **typed job queue** (BullMQ) for async work, and (2) a small set of **typed HTTP endpoints**
+on the gateway. This is what keeps the three workstreams independent.
+
+### Queue topology (the async backbone)
+
+Every arrow below is a typed job on a named BullMQ queue. Producer → `queue` → consumer:
+
+| Queue | Payload | Produced by | Consumed by |
+|---|---|---|---|
+| `discovery.run` | `{ adapter, cursor? }` | Zo cron endpoint | Discovery svc (Exa) |
+| `normalize.listing` | `RawListing` | Discovery svc | Normalize/dedup svc |
+| `rank.recompute` | `{ userId }` or `{ hackathonId }` | Normalize svc, Profile edits | Ranking svc |
+| `form.introspect` | `{ hackathonId, formUrl }` | Normalize svc | Discovery svc (Exa `/contents`) |
+| `registration.run` | `{ runId }` | Gateway (user clicks Register) | Registration svc → runner |
+| `notify.enqueue` | `{ userId, kind, payloadRef }` | Ranking svc, deadline sweep | Notify svc (writes row) |
+
+Rule: a service only ever **reads its own tables**; everything else arrives as a job payload or a
+REST response. Mock the producer and a stream can be built/tested in total isolation.
+
+### Flow A — continuous discovery → notification (runs on Zo, no user present)
+
+```
+Zo Automation (RRULE every 6h)
+   │  POST /internal/cron/discover
+   ▼
+Gateway ──enqueue──▶ discovery.run ──▶ Discovery svc
+   │                                      │  Exa /search (deep + outputSchema)
+   │                                      ▼
+   │                              normalize.listing ──▶ Normalize/dedup svc
+   │                                      │  upsert canonical Hackathon (+SourceRef)
+   │                                      ▼
+   │                              rank.recompute ──▶ Ranking svc
+   │                                      │  score + reasons; if score ≥ threshold:
+   │                                      ▼
+   │                              notify.enqueue ──▶ Notify svc (writes pending row + digest)
+   ◀──────────────── returns { newMatches, digest } ──────────────────────────────┘
+   ▼
+Zo delivers digest via Telegram  (only if newMatches > 0)
+```
+
+The endpoint is **synchronous-enough**: it kicks the pipeline and waits (with a short timeout) for
+the resulting digest so Zo can deliver it in the same run. If discovery is slow, the endpoint
+returns what's already pending and the next run catches up — the queue makes this safe.
+
+### Flow B — user-initiated registration (the demo path)
+
+```
+User clicks "Register" (frontend)
+   │  POST /registrations { userId, hackathonId }
+   ▼
+Gateway → Registration svc: create RegistrationRun (status=queued) ──▶ registration.run
+   ▼
+Registration svc state machine:
+   introspecting ─ pick runner by provider (Luma/GForm→Playwright, hard/visible→Simulang)
+        │           refresh FormFieldSpec[] (Exa /contents cached + live confirm)
+   filling ─────── map UserProfile.formAnswers → PlannedAction[]; flag llm_inferred
+   awaiting_approval ──▶ SSE push to frontend ◀── HARD STOP (human reviews plannedActions)
+        │  user clicks Approve  →  POST /registrations/:id/approve
+   submitting ──── runner.submit(); capture confirmation screenshot
+   succeeded ────▶ (if in_person & abroad) enqueue trip-planning (Exa)
+```
+
+Live progress streams to the UI over **SSE** (`GET /registrations/:id/stream`) so the approve modal
+shows introspection → fill → screenshot in real time. The **`awaiting_approval` gate is the only
+human touch-point** and the trust beat.
+
+### The integration contract surface (frozen on Day 0)
+
+- **Queues + payloads** — the table above, as typed job schemas in `@earlybirds/contracts`.
+- **Gateway REST** — `POST /registrations`, `POST /registrations/:id/approve`, `GET /registrations/:id/stream` (SSE), `GET /feed?userId=`, `PUT /profile`, plus internal `POST /internal/cron/{discover,deadlines}` (called only by Zo automations, shared-secret header).
+- **Runner interface** — `RegistrationRunner` (§5.4), so Playwright/Simulang are swappable.
+- **Source adapter interface** — `SourceAdapter` (§5.1), so Exa/Devpost/Luma are swappable.
+
+If it's not in this surface, services don't know about each other. That's the whole trick that lets
+3 people + many agents build simultaneously.
 
 ---
 
@@ -493,7 +617,10 @@ Each engineer owns a vertical slice end-to-end so no one is blocked waiting for 
 - Optional Devpost/Luma domain-scoped Exa passes.
 - Normalization & dedup service + golden-file test suite.
 - Exa `/contents` form-text extraction feeding `FormFieldSpec[]`.
-- **Zo Computer** setup: host Postgres/Redis/workers, scheduled discovery task, MCP for the team.
+- **Zo Computer** setup: deploy backend as Zo **Services** + frontend as a **Site**; create the
+  discovery/deadline **Automations** (RRULE → `/internal/cron/*` → conditional Telegram); store
+  sponsor keys as **Secrets**; wire **MCP** for the team.
+- `/internal/cron/{discover,deadlines}` endpoints (the seam Zo automations call).
 - Postgres schema + Prisma migrations.
 
 ### Engineer B — Registration & Runners (owns **Simulang**, the differentiator)
@@ -538,8 +665,9 @@ Each engineer owns a vertical slice end-to-end so no one is blocked waiting for 
 
 **M3 — Sponsor depth & polish**
 - Dedup across multiple Exa sources demonstrated live.
-- **SimulangRunner** drives a visible browser on one form (sponsor headline beat).
-- **Zo** runs the discovery cron on a schedule and pushes a **Telegram** reminder live.
+- **SimulangRunner** drives a visible browser on one form (sponsor headline beat), via
+  `scoredSearch` → `setValue`/`activate` on a no-login **Luma** RSVP.
+- **Zo Automation** hits `/internal/cron/discover` on schedule and pushes a **Telegram** digest live.
 - Trip-planning card (Exa) on an overseas event.
 
 **M4 — Demo hardening**
