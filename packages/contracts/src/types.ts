@@ -90,6 +90,13 @@ export interface UserProfile {
   locationBase?: { city: string; country: string };
   willingToTravel: boolean;
   travelRegions?: string[];
+  // Voice onboarding (§6.3.4) — optional; steers tone for llm_draft answers, never topic.
+  voice?: {
+    oneLiner?: string;
+    proudProject?: string;
+    outsideLane?: string;
+    writingSamples?: { label: string; text: string }[];
+  };
   formAnswers: Record<string, string>;
 }
 
@@ -117,7 +124,9 @@ export type RegistrationStatus =
 export interface PlannedAction {
   field: string; // canonicalName
   value: string;
-  source: "profile" | "default" | "llm_inferred";
+  // profile = saved field · default = static · llm_inferred = short factual answer ·
+  // llm_draft = long open-ended answer drafted in the user's voice (§6.3.5)
+  source: "profile" | "default" | "llm_inferred" | "llm_draft";
 }
 
 export interface RegistrationRun {

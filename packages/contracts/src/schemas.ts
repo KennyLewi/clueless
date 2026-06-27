@@ -83,6 +83,14 @@ export const UserProfileSchema = z.object({
   locationBase: z.object({ city: z.string(), country: z.string() }).optional(),
   willingToTravel: z.boolean(),
   travelRegions: z.array(z.string()).optional(),
+  voice: z
+    .object({
+      oneLiner: z.string().optional(),
+      proudProject: z.string().optional(),
+      outsideLane: z.string().optional(),
+      writingSamples: z.array(z.object({ label: z.string(), text: z.string() })).optional(),
+    })
+    .optional(),
   formAnswers: z.record(z.string()),
 });
 
@@ -97,7 +105,7 @@ export const RankedEventSchema = z.object({
 export const PlannedActionSchema = z.object({
   field: z.string(),
   value: z.string(),
-  source: z.enum(["profile", "default", "llm_inferred"]),
+  source: z.enum(["profile", "default", "llm_inferred", "llm_draft"]),
 });
 
 export const RegistrationRunSchema = z.object({
