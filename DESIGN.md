@@ -1,7 +1,7 @@
 # EarlyBirds — Technical Design Document
 
 > AI-powered hackathon discovery + auto-registration agent.
-> "You will never fill out a hackathon form again."
+> "Find hackathons. Register once. Move on."
 
 **Team:** 3 engineers (A / B / C) + a fleet of AI coding agents.
 **Constraint:** built on a hackathon timeline, so the architecture is deliberately
@@ -22,12 +22,14 @@ designed around three sponsor primitives:
 
 EarlyBirds runs a continuous pipeline:
 
-1. **Discover** — find hackathon listings via **Exa neural search** with structured extraction (Devpost / Luma / open web), not hand-rolled scrapers.
+1. **Discover** — find hackathon listings via **Exa neural search** with structured extraction
+   (Luma, Devpost, open web — all via Exa domain passes where needed).
 2. **Normalize & dedup** — collapse the same event seen across multiple sources into one canonical record.
 3. **Rank** — score events against a user profile and surface "why this one."
-4. **Notify** — deadline countdowns and reminders delivered through **Zo Computer** (Telegram / SMS / email) before registration closes.
-5. **Register** — drive the registration form end-to-end with **Playwright + Simulang**, pausing for **human-in-the-loop** approval before final submit.
-6. **Plan (stretch)** — bundle flight/hotel search (via Exa) for overseas events (HCM, HK, Shanghai).
+4. **Notify (deferred post-M2)** — deadline reminders via **Zo Computer** + Telegram; in-app countdowns ship in M2.
+5. **Register** — **Simulang** (local, user's Chrome) + **Playwright** (Zo fallback), with **human-in-the-loop**
+   approval before final submit.
+6. **Plan (stretch)** — flight/hotel search via Exa for overseas events; **Devpost JSON adapter** for discovery.
 
 The differentiator is **Register**, not Discover. Everything in this doc is biased
 toward making the registration moment reliable and demoable. The continuous pipeline
@@ -58,10 +60,10 @@ lives on **Zo Computer** so discovery and reminders keep running 24/7 with no la
 | Sponsor | Role in EarlyBirds | Why it's central (not bolted on) |
 |---|---|---|
 | **Exa** | The discovery + extraction engine | We don't write per-site scrapers. Exa `/search` (`type: "deep"`) with an `outputSchema` returns **structured hackathon records directly from the open web**, with `grounding[]` citations. `/contents` pulls clean form-page text for field introspection; `/answer` resolves fuzzy questions ("is this hackathon open to students?"). Discovery literally *is* Exa. |
-| **Simulang** | Visible registration runner | For forms that block headless automation, the Simulang runner drives a **real browser via the accessibility tree + mouse/keyboard** — this is the "watch the agent fill the form" demo beat. |
-| **Zo Computer** | Always-on host + delivery | The continuous pipeline (scheduled Exa discovery, dedup, notify) runs on a **persistent Zo Linux server** so it works 24/7 with no laptop open. Zo's scheduled tasks fire the discovery cron; Zo delivers reminders over **Telegram / SMS / email**. Cursor connects to Zo via its **MCP server** during dev. |
+| **Simulang** | Local visible registration runner | **`earlybirds-desktop`** on the user's machine drives their real Chrome via accessibility tree + mouse/keyboard — the "watch the agent fill the form" demo beat. Trust-first: their session, their cookies. |
+| **Zo Computer** | Always-on host + delivery | Hosts the continuous pipeline (Exa discovery cron, workers, DB). Notify delivery (Telegram) **deferred post-M2** — see §13. |
 | **OpenAI / Codex** | Reasoning layer | Normalization (messy text → structured fields), ranking `reasons[]`, and `llm_inferred` form-field mapping. Codex-style structured output keeps these deterministic and schema-bound. |
-| **Cursor** | Build-time agent fan-out | The whole contract-first architecture (§7) exists so many Cursor agents build subsystems in parallel against frozen interfaces. |
+| **Cursor** | Build-time agent fan-out | The whole contract-first architecture (§8) exists so many Cursor agents build subsystems in parallel against frozen interfaces. |
 
 **The flagship integration is Exa.** It collapses "scrape + parse + normalize" from a
 fragile, multi-adapter effort into a single neural-search-with-schema call — which is
@@ -76,39 +78,42 @@ ranks results, texts you the good ones, and — on your approval — Simulang re
 ## 3. High-level architecture
 
 ```
-   ┌─────────────┐                        ┌────────────────────────────────────────────────────┐
-   │   Exa API    │◀───────────────────────│                      Frontend (Web)                  │
-   │  /search     │   neural discovery     │  Next.js + React + Tailwind                          │
-   │  /contents   │   + structured extract │  - Feed / ranked events                              │
-   │  /answer     │                        │  - Event detail + "Register" CTA                     │
-   └──────┬───────┘                        │  - Registration review & approve modal               │
-          │                                │  - Profile editor                                    │
-          │                                └───────────────┬────────────────────────────────────┘
-          │                                                │ REST / SSE (typed client)
-          │                                ┌───────────────▼────────────────────────────────────┐
-          │                                │                   API Gateway (BFF)                  │
-          │                                │  Fastify/Express + zod-validated routes              │
-          │                                │  Auth, rate limiting, SSE for live reg progress      │
-          │                                └───┬───────────────┬───────────────┬─────────────────┘
-          │                                    │               │               │
-   ┌──────▼───────────────┐      ┌─────────────▼───┐  ┌────────▼────────┐  ┌───▼───────────────────┐
-   │  Discovery svc        │      │  Notify svc     │  │  Ranking svc    │  │  Registration svc      │
-   │  (Exa adapters,       │      │  (Zo delivery:  │  │  (profile match │  │  (orchestrates a       │
-   │   no hand scrapers)   │      │   TG/SMS/email) │  │   + LLM reason) │  │   reg run state machine)│
-   └──────────┬────────────┘      └────────┬────────┘  └────────┬────────┘  └───┬───────────────────┘
-              │                            │                    │                │ spawns
-              │                            │                    │        ┌───────▼──────────────────┐
-              │                            │                    │        │  Registration Runners     │
-              │                            │                    │        │  - Playwright runner       │
-              │                            │                    │        │  - Simulang runner (hard   │
-              │                            │                    │        │    forms / visible demo)   │
-              │                            │                    │        └───────────────────────────┘
-            ┌─▼────────────────────────────▼────────────────────▼───────────────────────────────┐
-            │                     Shared infra  —  hosted on Zo Computer                          │
-            │  Postgres (canonical store)  •  Redis/BullMQ (job queues)                           │
-            │  Object storage (screenshots, form snapshots)  •  Vector index (optional)           │
-            │  Zo scheduled tasks → discovery cron  •  Zo always-on workers  •  Zo MCP ↔ Cursor   │
-            └───────────────────────────────────────────────────────────────────────────────────┘
+                                    ┌──────────────────────────────────────────┐
+                                    │              Frontend (Web)               │
+                                    │  Next.js + React + Tailwind               │
+                                    │  - Feed / ranked events                   │
+                                    │  - Event detail + Exa citations (§6.3.0)  │
+                                    │  - Registration flow (autofill + confirm, §6.3.1) │
+                                    │  - Profile setup (§6.3.3)                 │
+                                    └────────────┬─────────────────┬─────────────┘
+                                                 │ REST / SSE      │ SSE (local runs)
+                                    ┌────────────▼─────────────────▼─────────────┐
+  Zo Automation ──POST /internal/cron/* ──▶ │           API Gateway (BFF)            │
+  (RRULE discover + deadlines)              │  Fastify + zod-validated routes        │
+                                            └──┬─────────┬─────────┬──────────┬──────┘
+                                               │         │         │          │
+                         ┌─────────────────────▼──┐  ┌───▼───┐  ┌──▼────┐  ┌──▼─────────────────┐
+                         │  Discovery svc          │  │ Notify│  │Ranking│  │ Registration svc    │
+                         │  (Exa adapter)          │  │ svc   │  │ svc   │  │ (reg run state      │
+                         └───────────┬─────────────┘  └───┬───┘  └───┬───┘  │  machine)           │
+                                     │                    │          │    └──────────┬──────────┘
+                                     ▼                    │          │               │
+                              ┌─────────────┐             │          │    ┌──────────▼──────────┐
+                              │   Exa API   │             │          │    │ PlaywrightRunner (Zo) │
+                              │  /search    │             │          │    │  GForm fallback     │
+                              │  /contents  │             │          │    └─────────────────────┘
+                              │  /answer    │             │          │
+                              └─────────────┘             │          │
+            ┌──────────────────────────────────────────────▼──────────▼──────────────────────┐
+            │                     Shared infra — hosted on Zo Computer                        │
+            │  Postgres · Redis/BullMQ · Object storage · Zo Automations · MCP ↔ Cursor      │
+            └─────────────────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────── User machine (local) ─────────────────────────┐
+  │  earlybirds-desktop  →  SimulangRunner  →  user's Chrome (visible)     │
+  │       ▲ SSE / RegistrationProgressEvent back to Frontend               │
+  │       └── run commands from Registration svc via Gateway                │
+  └───────────────────────────────────────────────────────────────────────┘
 ```
 
 All cross-service communication is either (a) a queued job with a typed payload, or
@@ -227,7 +232,8 @@ interface RegistrationRun {
   userId: string;
   hackathonId: string;
   runner: "playwright" | "simulang";
-  status: "queued" | "introspecting" | "filling" | "awaiting_approval"
+  status: "queued" | "introspecting" | "filling" | "needs_input"
+        | "captcha_encountered" | "oauth_redirect" | "awaiting_approval"
         | "submitting" | "succeeded" | "failed" | "cancelled";
   plannedActions: PlannedAction[]; // what it WILL do — shown to the human before submit
   artifacts: { screenshots: string[]; finalScreenshot?: string };
@@ -241,6 +247,15 @@ interface PlannedAction {
   value: string;                   // what we'll type (redacted for secrets in UI)
   source: "profile" | "default" | "llm_inferred";
 }
+
+// SSE events streamed to the autofill reveal screen (§6.3.1).
+type RegistrationProgressEvent =
+  | { type: "step_started"; step: string; runner: RegistrationRun["runner"] }
+  | { type: "field_filling"; field: string; label: string }
+  | { type: "field_filled"; field: string; value: string; source: PlannedAction["source"] }
+  | { type: "paused"; reason: "needs_input" | "captcha_encountered" | "oauth_redirect" }
+  | { type: "awaiting_approval"; plannedActions: PlannedAction[] }
+  | { type: "screenshot"; url: string };  // debug/fallback; not the primary UI surface
 
 type RegistrationProvider =
   | "devpost" | "luma" | "google_form" | "custom" | "unknown";
@@ -317,17 +332,20 @@ interface SourceAdapter {
 Adapters (in priority order):
 
 1. **ExaAdapter** — the engine. Broad neural queries + `outputSchema` → structured `RawListing[]`
-   spanning Devpost, Luma, university pages, and the open web in one pass. Build first; it carries discovery.
-2. **DevpostAdapter** — optional precision pass: query Exa with `includeDomains: ["devpost.com"]`
-   (or hit Devpost directly) for high-confidence structured records on the demo-critical source.
-3. **LumaAdapter** — `includeDomains: ["lu.ma"]` Exa pass for lu.ma-hosted events. Luma is also our
+   spanning Devpost, Luma, university pages, and the open web in one pass. Domain-scoped passes
+   (`includeDomains: ["devpost.com"]`, `["lu.ma"]`) cover Devpost/Luma without a separate adapter.
+   Build first; it carries all discovery for the hackathon.
+2. **LumaAdapter** — optional thin wrapper: `includeDomains: ["lu.ma"]` Exa pass. Luma is our
    **preferred registration demo target** (verified): RSVP needs only **name + email, no forced login**,
    and the form layout is consistent across events — so the runner is rock-solid on it. *Avoid*
    approval-gated or crypto/token-gated Luma events (some require wallet verification or host approval).
 
-We **drop hand-rolled scraping and the LinkedIn adapter** from the plan: Exa already crawls the
-open web (including content surfaced from LinkedIn posts) without the ToS/auth/brittleness risk,
-and it removes a whole class of maintenance from a hackathon timeline.
+We **drop hand-rolled HTML scraping and the LinkedIn adapter** from the plan. Exa covers the open web
+(including Devpost/Luma pages and LinkedIn-surfaced content) without per-site HTML parsers.
+
+**Deferred — DevpostAdapter (post-hackathon):** direct `GET devpost.com/api/hackathons` precision pass
+(undocumented JSON endpoint the site uses; no official API). Useful later for Devpost-heavy coverage
+without Exa cost; not in M0–M4 scope.
 
 **Form field extraction (Exa-assisted):** for each event with a `formUrl`, call Exa `/contents`
 to pull clean page text, then an LLM/Codex pass proposes `FormFieldSpec[]`. The live runner
@@ -367,16 +385,26 @@ Output is cached per (user, event) and invalidated on profile edit or event upda
 The crown jewel. Modeled as an explicit **state machine** (`RegistrationRun.status`).
 
 ```
-queued → introspecting → filling → awaiting_approval → submitting → succeeded
-                                          │                   │
-                                          └── cancelled       └── failed
+queued → introspecting → filling ⇄ needs_input / captcha_encountered / oauth_redirect
+                              │
+                              ▼
+                    awaiting_approval → submitting → succeeded
+                              │              │
+                              └── cancelled  └── failed
 ```
 
 - **introspecting** — confirm/refresh `FormFieldSpec[]` against the live page.
 - **filling** — map `UserProfile.formAnswers` + `PlannedAction[]`. Unmapped required fields are
   flagged. LLM may infer values but they're tagged `llm_inferred` and surfaced for review.
-- **awaiting_approval** — **hard stop.** Frontend shows `plannedActions` + a screenshot. Nothing is
-  submitted without explicit user approval. This is a product feature (trust) and a safety rail.
+- **needs_input** — pause: a required field has no profile mapping. UI prompts the user inline;
+  resume → `filling`.
+- **captcha_encountered** — pause: runner hit a CAPTCHA. UI tells user to complete it in the
+  browser, then Resume → `filling`.
+- **oauth_redirect** — pause: form requires in-browser OAuth. UI tells user to sign in, then
+  Resume → `filling`.
+- **awaiting_approval** — **hard stop.** Frontend shows the confirm gate on the registration
+  screen (§6.3.1): diff of `plannedActions`, field values in mono, `llm_inferred` flagged. Nothing
+  is submitted without explicit user approval. This is a product feature (trust) and a safety rail.
 - **submitting** — execute the final submit; capture confirmation screenshot.
 
 **Two interchangeable runners behind one interface:**
@@ -390,54 +418,64 @@ interface RegistrationRunner {
 }
 ```
 
-- **SimulangRunner (sponsor headline)** — drives a **real, visible browser** via `@simular-ai/simulang-js`
-  (pinned `6.0.1`, verified locally). This is the **demo money shot**: the judge watches the agent
-  physically navigate and fill the form. The actual API the runner uses:
+- **SimulangRunner (local, sponsor headline)** — runs on the **user's machine** via a lightweight
+  **`earlybirds-desktop`** agent (Engineer B). Drives the user's real Chrome with their cookies/session
+  intact — the trust story. Registration svc on Zo assigns `runner: "simulang"` runs to the connected
+  desktop agent; `RegistrationProgressEvent` SSE streams back to the web UI (§6.3.1). Demo: projector
+  shows web UI + local Chrome window side-by-side. API (pinned `@simular-ai/simulang-js` `6.0.1`):
 
-  ```ts
-  import { App, FocusPolicy, Visibility, TraversalOrder, ariaRoleToString } from '@simular-ai/simulang-js'
+```ts
+import { App, FocusPolicy, Visibility, TraversalOrder, ariaRoleToString } from '@simular-ai/simulang-js'
 
-  // 1. Open the registration page in a real Chrome window.
-  const inst = App.exactName('Google Chrome').open(formUrl, FocusPolicy.Steal, Visibility.Show, true);
-  inst.enableAccessibility();                 // Chrome ships a11y off by default
+// 1. Open the registration page in the user's real Chrome window.
+const inst = App.exactName('Google Chrome').open(formUrl, FocusPolicy.Steal, Visibility.Show, true);
+inst.enableAccessibility();                 // Chrome ships a11y off by default
 
-  // 2. For each FormFieldSpec, locate the control by *concept text* (robust to DOM churn).
-  const [node] = inst.scoredSearch(TraversalOrder.BreadthFirst, 50_000, false, field.label, 0.75);
+// 2. For each FormFieldSpec, locate the control by *concept text* (robust to DOM churn).
+const [node] = inst.scoredSearch(TraversalOrder.BreadthFirst, 50_000, false, field.label, 0.75);
 
-  // 3. Act on it. Calls are SYNCHRONOUS (napi-rs) — try/catch, no await on native calls.
-  node.setValue(value);                       // text/email/textarea
-  node.activate();                            // buttons / checkboxes / submit
-  ```
+// 3. Act on it. Calls are SYNCHRONOUS (napi-rs) — try/catch, no await on native calls.
+node.setValue(value);                       // text/email/textarea
+node.activate();                            // buttons / checkboxes / submit
+```
 
-  Correctness notes verified from the shipped `CLAUDE.md` / `index.d.ts`: native calls are
-  **synchronous** (errors throw, no Promises); re-run `scoredSearch` per step rather than caching
-  nodes across tree rebuilds; `AriaRole` is numeric (use `ariaRoleToString`); coordinates are physical
-  pixels; `App.open` focus/visibility are advisory. The **concept-text search** (`scoredSearch`) is the
-  key win — we match fields by their human label ("Full name", "GitHub URL") instead of brittle
-  selectors, so the same runner generalizes across unfamiliar forms. Needs `OPENROUTER_API_KEY` only
-  if it falls back to a VLM for grounding.
-- **PlaywrightRunner** — the reliable workhorse. Fast, scriptable, headless, great for
-  Devpost/Luma/Google Forms. Used for the bulk of forms and as the deterministic fallback if a
-  live Simulang run gets flaky during judging.
+```ts
+// Local bridge contract (earlybirds-desktop ↔ Gateway).
+interface LocalSimulangBridge {
+  connect(userId: string): Promise<{ sessionId: string }>;
+  executeRun(runId: string): Promise<void>;
+  // Desktop agent pushes events; Gateway relays to GET /registrations/:id/stream
+}
+```
+
+Correctness notes verified from the shipped `CLAUDE.md` / `index.d.ts`: native calls are
+**synchronous** (errors throw, no Promises); re-run `scoredSearch` per step rather than caching
+nodes across tree rebuilds; `AriaRole` is numeric (use `ariaRoleToString`); coordinates are physical
+pixels; `App.open` focus/visibility are advisory. The **concept-text search** (`scoredSearch`) is the
+key win — we match fields by their human label ("Full name", "GitHub URL") instead of brittle
+selectors, so the same runner generalizes across unfamiliar forms. Needs `OPENROUTER_API_KEY` only
+if it falls back to a VLM for grounding.
+- **PlaywrightRunner (server on Zo)** — headless workhorse on Zo for **Google Form fallback**.
+  Fast, scriptable, no desktop install. Never used for the primary Luma/Simulang demo path.
 
 Runner choice is a per-event policy (`Hackathon.registration.provider` → preferred runner). For the
-demo we deliberately route at least one event through **Simulang** to show the sponsor capability,
-and keep Playwright as the safety net. Both develop in parallel behind the one interface.
+demo: **Luma → Simulang (local)**, **GForm → Playwright (Zo)**. Playwright remains the safety net if
+a live Simulang run gets flaky during judging.
 
 ### 5.5 Notify service — *delivered via Zo Computer*
 
 - Computes countdowns from `registrationClosesAt`.
 - Emits reminders at T-7d / T-2d / T-12h thresholds, plus a "new match found" push.
 - Maintains a `pending_notifications` table; the service's job is only to *decide what's worth
-  sending* and write a row. **Actual delivery is handed to Zo** (Telegram / SMS / email / Slack /
-  Discord), so we build zero notification infrastructure (see §5.7 for the exact mechanism).
+  sending* and write a row. **Actual delivery is handed to Zo** (Telegram primary — see §13;
+  SMS/email also supported). Implementation **deferred post-M2**; infra pattern in §5.7.
 - Re-fires when a dedup/change event moves a deadline.
 
 ### 5.6 Trip planning (stretch) — *Exa for logistics*
 
 - Triggered on successful registration for an `in_person` event outside `locationBase.country`.
 - Uses **Exa `/search` + `/answer`** to pull flight-window options, visa notes, and nearby stays
-  (e.g. "cheapest flights SIN→SGN around <dates>", grounded with citations), or deep-links a
+  (e.g. "cheapest flights SIN→SGN around `{dates}`", grounded with citations), or deep-links a
   booking search with prefilled dates/airports.
 - Demo-friendly minimum: a "Register + here's your flight window" card. No booking, just search.
 
@@ -461,7 +499,7 @@ are non-deterministic LLM runs (and metered). So the automation stays dumb and r
 hits an internal endpoint and conditionally notifies. Example automation we create on Zo:
 
 > **Schedule:** `RRULE:FREQ=HOURLY;INTERVAL=6`
-> **Instruction:** "POST `https://earlybirds.<our>.zo.space/internal/cron/discover`. It returns
+> **Instruction:** "POST `https://earlybirds.{our}.zo.space/internal/cron/discover`. It returns
 > JSON `{ newMatches: number, digest: string }`. If `newMatches > 0`, send me the `digest` over
 > Telegram. Otherwise do nothing."
 > **delivery_method:** `telegram`
@@ -488,7 +526,7 @@ Every arrow below is a typed job on a named BullMQ queue. Producer → `queue` �
 
 | Queue | Payload | Produced by | Consumed by |
 |---|---|---|---|
-| `discovery.run` | `{ adapter, cursor? }` | Zo cron endpoint | Discovery svc (Exa) |
+| `discovery.run` | `{ adapter: "exa" \| "luma", cursor? }` | Zo cron endpoint | Discovery svc (Exa) |
 | `normalize.listing` | `RawListing` | Discovery svc | Normalize/dedup svc |
 | `rank.recompute` | `{ userId }` or `{ hackathonId }` | Normalize svc, Profile edits | Ranking svc |
 | `form.introspect` | `{ hackathonId, formUrl }` | Normalize svc | Discovery svc (Exa `/contents`) |
@@ -532,42 +570,206 @@ User clicks "Register" (frontend)
 Gateway → Registration svc: create RegistrationRun (status=queued) ──▶ registration.run
    ▼
 Registration svc state machine:
-   introspecting ─ pick runner by provider (Luma/GForm→Playwright, hard/visible→Simulang)
+   introspecting ─ pick runner: Luma → Simulang (local earlybirds-desktop), GForm → Playwright (Zo)
         │           refresh FormFieldSpec[] (Exa /contents cached + live confirm)
    filling ─────── map UserProfile.formAnswers → PlannedAction[]; flag llm_inferred
-   awaiting_approval ──▶ SSE push to frontend ◀── HARD STOP (human reviews plannedActions)
-        │  user clicks Approve  →  POST /registrations/:id/approve
+        │           Simulang: desktop agent drives user's Chrome; SSE → form mirror in UI
+   awaiting_approval ──▶ SSE push to frontend ◀── HARD STOP (confirm gate, §6.3.1)
+        │  user clicks Confirm & submit  →  POST /registrations/:id/approve
    submitting ──── runner.submit(); capture confirmation screenshot
    succeeded ────▶ (if in_person & abroad) enqueue trip-planning (Exa)
 ```
 
-Live progress streams to the UI over **SSE** (`GET /registrations/:id/stream`) so the approve modal
-shows introspection → fill → screenshot in real time. The **`awaiting_approval` gate is the only
-human touch-point** and the trust beat.
+Live progress streams to the UI over **SSE** (`GET /registrations/:id/stream`) as
+`RegistrationProgressEvent` payloads (§4) onto the **autofill reveal screen** (§6.3.1):
+introspection → fill → confirm gate in one view — not a separate modal overlay. The
+**`awaiting_approval` gate is the only human touch-point** and the trust beat.
 
 ### The integration contract surface (frozen on Day 0)
 
 - **Queues + payloads** — the table above, as typed job schemas in `@earlybirds/contracts`.
-- **Gateway REST** — `POST /registrations`, `POST /registrations/:id/approve`, `GET /registrations/:id/stream` (SSE), `GET /feed?userId=`, `PUT /profile`, plus internal `POST /internal/cron/{discover,deadlines}` (called only by Zo automations, shared-secret header).
-- **Runner interface** — `RegistrationRunner` (§5.4), so Playwright/Simulang are swappable.
-- **Source adapter interface** — `SourceAdapter` (§5.1), so Exa/Devpost/Luma are swappable.
+- **Gateway REST** — `POST /registrations`, `POST /registrations/:id/approve`, `GET /registrations/:id/stream` (SSE, `RegistrationProgressEvent`), `GET /feed?userId=`, `PUT /profile`, plus internal `POST /internal/cron/{discover,deadlines}` (called only by Zo automations, shared-secret header).
+- **Runner interface** — `RegistrationRunner` (§5.4) + `LocalSimulangBridge` for desktop agent.
+- **Source adapter interface** — `SourceAdapter` (§5.1), so Exa/Luma are swappable; Devpost adapter deferred.
 
 If it's not in this surface, services don't know about each other. That's the whole trick that lets
 3 people + many agents build simultaneously.
 
 ---
 
-## 6. Tech stack
+## 6. Product & UI design
+
+Engineer C owns implementation. SSE-driven agent activity (§5.8 Flow B) renders on these screens.
+Visual spec is frozen here so frontend agents don't improvise typography or color.
+
+### 6.1 Design personality
+
+- **Calm, confident, trustworthy assistant.** Because the product acts on the user's real,
+  logged-in accounts, trust is the core job — the design earns it through restraint, not flourish.
+- **Reference points:**
+  - *Resting state* → Linear: quiet, restrained, one accent.
+  - *Agent working* → Perplexity narrating "reading sources": precise, slightly technical, shows its work.
+  - *Confirm-before-submit* → Cursor showing a diff before you approve.
+- **Avoid the default "AI project" look:** no Inter/Geist, no purple-to-blue gradient, no
+  stock-component sameness.
+
+Aligns with §2 principle *Registration is human-gated by default* — personality and architecture
+both treat trust as load-bearing.
+
+### 6.2 Design tokens
+
+#### Type
+
+- **UI / interface / wordmark:** Hanken Grotesk (weights 400, 500)
+- **Agent activity, field values, system status, countdowns, confirmation codes:** IBM Plex Mono
+  (weights 400, 500)
+- **Core rule:** anything the **human** reads is Hanken; anything the **agent** produces is mono.
+  This human/machine type contrast is intentional and load-bearing — do not blur it.
+
+Google Fonts import:
+
+```css
+@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap');
+```
+
+#### Color
+
+| Token | Hex | Use |
+|---|---|---|
+| Accent (primary actions, checks, active states) | `#1D9E75` | Confirm buttons, field-complete checks, "ready" shield |
+| Accent dark (button fills, logo mark) | `#0F6E56` | Filled buttons, bird mark |
+| Accent tint (pills, light fills) | `#E1F5EE` | Status pills, subtle highlights |
+| Success / "registered" **only** | fill `#FBEEDB`, text `#7A4A06`, mark `#C97B14` | Sunrise amber — hero block on `succeeded` (§6.3.2) |
+| Everything else | Neutral grays / system defaults | Backgrounds, borders, body text |
+
+No gradients anywhere.
+
+#### Rules
+
+- **Amber appears exactly once** in the entire flow: the instant registration succeeds. Never
+  earlier — not on "ready to review." Reserving it is what gives it impact.
+- **One accent per screen.** If a screen seems to need a second color, it's probably the success
+  state — otherwise reconsider.
+- **Logo:** geometric bird **mark**, never a mascot with a face. Must read at 16px.
+- **Countdown numerals:** IBM Plex Mono so digits don't jitter as they tick (see §6.3.1 event context).
+- **Motion:** reserved for moments that matter (autofill reveal; success beat) — never decoration.
+  Success animation plays **once**, never loops.
+- **Copy:** carries the "early bird" personality on the success moment only (e.g. "You're in. Worm
+  secured."). Stay calm elsewhere — no cheerleading during fill or review.
+- **`llm_inferred` at review:** small amber **text** chip on the field row during `awaiting_approval`
+  only — distinct from the sunrise hero amber block (§6.3.2).
+
+### 6.3 Key screens
+
+#### 6.3.0 Event detail + Exa citation drawer
+
+Feed card → event detail. Primary CTA: **Register**. Sponsor-visible Exa beat for demo step 2.
+
+**Layout:**
+- Event title, location, mono deadline countdown, "why this one" reasons (Hanken)
+- **"Via Exa"** badge on cards where `SourceRef.source === "exa"`
+- Expandable **"How we found this"** drawer:
+  - Exa query snippet used for discovery (mono, truncated)
+  - 2–3 `exaGrounding[]` citation URLs with field labels
+  - Optional confidence chip per extracted field
+- If merged from multiple sources: **"Merged from N sources"** badge (dedup)
+
+Drawer copy stays calm/technical — "Sources" not "AI magic."
+
+#### 6.3.1 Autofill reveal (demo centerpiece)
+
+Calm Linear-style frame at rest — the only motion at idle is a small "auto-registering" status
+spinner in the header status pill.
+
+**Layout (top → bottom):**
+
+1. **App header** — bird mark + wordmark (Hanken), status pill (accent tint)
+2. **Event context** — event name + location (Hanken); registration deadline countdown (mono)
+3. **Two columns**
+   - **Left — registration form (form mirror):** in-app mirror fed by SSE + `plannedActions` — not a
+     raw browser screenshot. Fields populate live as the agent fills; value text types in (mono);
+     each completed field gets a teal (`#1D9E75`) check. **Simulang runs locally** (`earlybirds-desktop`)
+     driving the user's Chrome beside the UI; form mirror reflects what the agent typed.
+     `RegistrationRun.artifacts` screenshots are debug/fallback only.
+   - **Right — agent activity feed:** mono step log driven by `RegistrationProgressEvent` (§4),
+     Perplexity-style — e.g. "reading form structure → found N fields → matching to your profile →
+     filling · {field}"
+4. **Footer — confirm gate** — locked/dimmed **Confirm & submit** until fill completes; footer note
+   flips from lock icon + "Nothing is submitted until you confirm" → teal shield-check + "Ready —
+   review, then confirm"
+
+**Behavior (maps to `RegistrationRun.status`):**
+
+| Phase | Status | UI |
+|---|---|---|
+| Agent working | `introspecting` → `filling` (incl. pause states) | Feed steps through; form fields populate; Confirm locked |
+| Human review | `awaiting_approval` | All fields filled + checked; Confirm unlocked; user reviews diff |
+| Submit | `submitting` → `succeeded` | Confirm shows spinner → navigate to §6.3.2 |
+
+Human-in-the-loop is **mandatory** — the agent never auto-submits (§2, §5.4).
+
+#### 6.3.2 Registered success
+
+The **one amber moment.** Color discipline: amber = emotion (hero only); teal = every action.
+They never overlap on this screen.
+
+**Layout (top → bottom):**
+
+1. **Celebratory hero** (sunrise amber block) — bird mark flies in **once** (non-looping); headline
+   "You're in. Worm secured." (Hanken) + event name; mono confirmation code
+2. **Confirmation details card** (neutral) — when / where / confirmation email or status;
+   **Add to calendar** (teal) · **View confirmation**
+3. **Next matches strip** (quiet, neutral) — 1–2 upcoming hackathons with mono deadlines and
+   understated Register buttons; rides momentum without competing with the celebration
+
+Maps to `RegistrationRun.status === "succeeded"`. Confirmation code: runner-captured reference
+from the provider when available, else a short hash of `runId` for display.
+
+#### 6.3.3 Profile setup ("fill once, never again")
+
+First-run or incomplete profile. Most-used screen in the real product; demo can pre-seed and skip.
+
+**Layout:**
+- Headline (Hanken): "Fill once — EarlyBirds reuses these on every form."
+- Completeness meter (e.g. "4 of 6 fields")
+- Canonical field list mapped to `UserProfile.formAnswers`: name, email, school, skills, GitHub, etc.
+- Values the user enters display in Hanken; saved keys shown in mono in a subtle sidebar if helpful
+- Primary CTA: **Save profile** (teal). Secondary: skip for now (returns to feed)
+
+Incomplete profile gates Register with inline prompt linking here.
+
+### 6.4 UI state matrix
+
+Frontend states the UI must handle. Copy follows §6.2 type/color rules.
+
+| State / trigger | User sees | Primary action |
+|---|---|---|
+| `empty_feed` | "No matches yet — searching hackathons." Last query if known (Hanken). | Edit profile |
+| `discovery_loading` | Skeleton cards + "Searching via Exa…" | — |
+| `queued` / `introspecting` | Agent feed (mono): "Reading form structure…" Status pill: auto-registering. | Cancel run |
+| `filling` | §6.3.1 two-column view; fields populate with mono values + teal checks; Confirm locked | Cancel run |
+| `needs_input` | "This form asks for **{field}** — we don't have it yet." Inline input in form column. | Provide value → Resume |
+| `captcha_encountered` | "Complete the CAPTCHA in your browser, then click Resume." | Resume |
+| `oauth_redirect` | "Sign in to **{provider}** in your browser, then click Resume." | Resume |
+| `awaiting_approval` | §6.3.1 footer: shield-check "Ready — review, then confirm"; Confirm unlocked; `llm_inferred` flagged (amber **text** chip only — not sunrise hero amber) | Confirm & submit · Cancel |
+| `submitting` | Confirm button spinner (teal) | — |
+| `succeeded` | §6.3.2 amber hero + details card + next matches | Add to calendar · Back to feed |
+| `failed` | Last artifact screenshot + error stage (Hanken message, mono error code if any) | Open form manually · Retry |
+| `cancelled` | "Registration cancelled." | Back to event |
+
+---
+
+## 7. Tech stack
 
 | Layer | Choice | Why |
 |---|---|---|
-| **Discovery (sponsor)** | **Exa** `/search` + `/contents` + `/answer` | neural search with `outputSchema` → structured events; replaces scrapers |
+| **Discovery (sponsor)** | **Exa** `/search` + `/contents` + `/answer` | neural search with `outputSchema` + domain passes for Luma/Devpost |
 | **Always-on host (sponsor)** | **Zo Computer** | persistent Linux server, scheduled tasks, TG/SMS/email delivery, MCP ↔ Cursor |
-| **Registration (sponsor)** | **simulang-js** + Playwright | Simulang = visible browser-drive demo; Playwright = reliable fallback |
+| **Registration (sponsor)** | **simulang-js** (local) + Playwright (Zo) | Simulang = user's visible Chrome via `earlybirds-desktop`; Playwright = GForm fallback |
 | **Reasoning (sponsor)** | **OpenAI / Codex** (OpenRouter for Simulang grounding) | normalization, ranking reasons, form-field inference |
 | **Build (sponsor)** | **Cursor** agents | parallel contract-first development |
 | Language | TypeScript everywhere | one contract package, shared by FE/BE/runners |
-| Frontend | Next.js + React + Tailwind | fast, demoable, SSR for the feed |
+| Frontend | Next.js + React + Tailwind + **Hanken Grotesk** / **IBM Plex Mono** (§6.2) | fast, demoable, SSR; design tokens frozen in §6 |
 | API | Fastify + zod | schema-validated, generates the typed client |
 | Queue | BullMQ on Redis | simple, observable, parallel workers |
 | DB | Postgres + Prisma | canonical store, migrations, JSON columns for raw |
@@ -577,7 +779,7 @@ If it's not in this surface, services don't know about each other. That's the wh
 
 ---
 
-## 7. Parallelization strategy
+## 8. Parallelization strategy
 
 The whole architecture exists to make work **independently shippable**. Three mechanisms:
 
@@ -594,10 +796,10 @@ The whole architecture exists to make work **independently shippable**. Three me
 Because the contracts are frozen, each engineer can run multiple AI agents in parallel **inside their
 stream** without merge chaos:
 
-- One agent on the **Exa query/outputSchema tuning** + one on **Devpost/Luma domain-scoped passes**.
+- One agent on the **Exa query/outputSchema tuning** + one on **Luma domain-scoped pass**.
 - One agent per **FormFieldSpec mapping heuristic** + a test agent writing golden tests.
 - One agent on **SimulangRunner**, another on **PlaywrightRunner**, both behind `RegistrationRunner`.
-- One agent on the **frontend review modal**, another on the **feed**, sharing the typed API client.
+- One agent on the **frontend autofill reveal + confirm gate** (§6.3.1), another on the **feed**, sharing the typed API client.
 - One agent wiring **Zo scheduled tasks + Telegram/SMS delivery**.
 
 Rule: **agents only touch files inside their stream's directory**; contract edits go through a human.
@@ -606,7 +808,7 @@ This keeps parallel agent output conflict-free. Cursor agents can also reach the
 
 ---
 
-## 8. Work split (3 engineers)
+## 9. Work split (3 engineers)
 
 Each engineer owns a vertical slice end-to-end so no one is blocked waiting for "the backend" or
 "the frontend." Shared contracts package is co-owned.
@@ -614,7 +816,7 @@ Each engineer owns a vertical slice end-to-end so no one is blocked waiting for 
 ### Engineer A — Discovery & Data (owns **Exa** + **Zo** runtime)
 - `@earlybirds/contracts` (lead author; others review).
 - **ExaAdapter**: query design, `outputSchema`, grounding → `RawListing[]` (the discovery engine).
-- Optional Devpost/Luma domain-scoped Exa passes.
+- Luma domain-scoped Exa pass (`includeDomains: ["lu.ma"]`).
 - Normalization & dedup service + golden-file test suite.
 - Exa `/contents` form-text extraction feeding `FormFieldSpec[]`.
 - **Zo Computer** setup: deploy backend as Zo **Services** + frontend as a **Site**; create the
@@ -624,17 +826,18 @@ Each engineer owns a vertical slice end-to-end so no one is blocked waiting for 
 - Postgres schema + Prisma migrations.
 
 ### Engineer B — Registration & Runners (owns **Simulang**, the differentiator)
-- Registration service + state machine + SSE progress events.
-- `RegistrationRunner` interface.
-- **SimulangRunner** — the visible browser-drive demo beat (sponsor headline).
-- PlaywrightRunner (Devpost/Luma/Google Forms) — reliable fallback.
+- Registration service + state machine + **`RegistrationProgressEvent` SSE** (§4, §6.3.1).
+- `RegistrationRunner` interface + **`earlybirds-desktop`** local agent + `LocalSimulangBridge`.
+- **SimulangRunner** — local visible browser demo beat (sponsor headline).
+- PlaywrightRunner on Zo (Google Forms) — reliable fallback.
 - PlannedAction generation + Codex/LLM field inference with redaction.
 
 ### Engineer C — Frontend, API, Ranking & Notify (owns **Zo delivery**)
 - API gateway (Fastify + zod) + typed client generation.
 - Ranking service (deterministic phase + LLM/Codex reasons).
-- Frontend: feed, event detail, **registration review/approve modal** (the trust beat), profile editor.
-- Notify service + **Zo Telegram/SMS/email delivery**.
+- Frontend: feed, **event detail + Exa drawer** (§6.3.0), **autofill reveal** (§6.3.1),
+  **registered success** (§6.3.2), **profile setup** (§6.3.3).
+- Notify service (Zo **Telegram** delivery — deferred post-M2; see §13).
 
 ### Co-owned / glue
 - Contracts package (A leads, all review).
@@ -644,7 +847,7 @@ Each engineer owns a vertical slice end-to-end so no one is blocked waiting for 
 
 ---
 
-## 9. Milestones (hackathon timeline)
+## 10. Milestones (hackathon timeline)
 
 **M0 — Foundations (first few hours)**
 - Freeze `@earlybirds/contracts`. Stand up docker-compose (Postgres/Redis/MinIO) for local dev.
@@ -655,45 +858,51 @@ Each engineer owns a vertical slice end-to-end so no one is blocked waiting for 
 **M1 — Vertical slice (Exa happy path)**
 - **ExaAdapter** `deep` search + `outputSchema` → normalize → real events in DB.
 - Ranking returns events with reasons.
-- Frontend feed shows them; event detail has a "Register" button.
+- Frontend feed + event detail with Exa drawer stub (§6.3.0); "Register" button.
 - PlaywrightRunner introspects + fills a Google Form, stops at `awaiting_approval`.
 
 **M2 — The registration moment**
-- Review/approve modal shows `plannedActions` + screenshot.
-- Approve → submit → confirmation screenshot. **This is the demo.**
-- Notify countdown on the event card.
+- **`earlybirds-desktop`** connects; SimulangRunner fills Luma locally.
+- Autofill reveal screen (§6.3.1): agent feed + form mirror + confirm gate; stops at `awaiting_approval`.
+- Confirm & submit → registered success screen (§6.3.2). **This is the demo.**
+- Profile setup screen (§6.3.3) — can pre-seed for demo.
+- Notify countdown on the event card (mono numerals, §6.2).
 
 **M3 — Sponsor depth & polish**
-- Dedup across multiple Exa sources demonstrated live.
-- **SimulangRunner** drives a visible browser on one form (sponsor headline beat), via
-  `scoredSearch` → `setValue`/`activate` on a no-login **Luma** RSVP.
-- **Zo Automation** hits `/internal/cron/discover` on schedule and pushes a **Telegram** digest live.
-- Trip-planning card (Exa) on an overseas event.
+- One feed card pre-seeded showing "Merged from 3 sources" (dedup result — not run live).
+- Exa citation drawer live on event detail (§6.3.0).
+- **Zo Automation** hits `/internal/cron/discover` on schedule (Exa adapter).
 
-**M4 — Demo hardening**
+**M4 — Demo hardening + deferred beats**
 - Pre-seed a clean dataset on Zo, rehearse the 2-minute run, add failure fallbacks (Playwright
   fallback + cached screenshots if a live Simulang/site run is flaky during judging).
+- **Telegram notify** via Zo (§13 — deferred): pre-triggered message or live push for **[ZO PAUSE]**.
+- **DevpostAdapter** (`devpost.com/api/hackathons`) — post-hackathon if time.
 
 ---
 
-## 10. Demo script (2 minutes)
+## 11. Demo script (2 minutes)
 
-1. Open the feed → "EarlyBirds found these for you" via **Exa**, each with a one-line reason.
-2. Show the same hackathon appearing once despite multiple sources (Exa-powered dedup beat).
-3. Show a **Telegram reminder** that **Zo** pushed on a schedule — "this ran while my laptop was closed."
-4. Click **Register** → **Simulang drives a real browser**, filling the form live → review modal shows exactly what it'll submit.
-5. Click **Approve** → submit → confirmation screenshot. ("You never touched the form.")
-6. For the overseas event → "Register + here's your flight window" card (Exa, stretch).
+1. Open the feed → ranked events with "why this one" reasons; **Via Exa** badges where applicable.
+2. **[EXA PAUSE]** Event detail → expand **"How we found this"** drawer → show grounding citations (§6.3.0).
+   Pre-seeded **"Merged from 3 sources"** badge — don't run dedup live.
+3. **[ZO PAUSE — deferred, §13]** Show pre-triggered **Telegram** reminder if wired by M4; otherwise skip live.
+4. **[SIMULANG PAUSE]** Click **Register** → user's local Chrome opens; autofill reveal (§6.3.1): agent feed +
+   form mirror populate with mono values + teal checks.
+5. **[TRUST PAUSE]** Confirm gate unlocks → review `llm_inferred` field if present → "Ready — review, then confirm."
+6. **[HERO]** Confirm & submit → registered success (§6.3.2): amber hero, "You're in. Worm secured.", mono confirmation code.
+
+*(Trip planning — backup slide only, not live. See §5.6.)*
 
 ---
 
-## 11. Risks & mitigations
+## 12. Risks & mitigations
 
 | Risk | Mitigation |
 |---|---|
 | Exa returns noisy / non-hackathon results | Tight `outputSchema` + post-validation; domain-scoped passes for demo-critical sources; cache a known-good response for the demo |
 | Exa `deep` latency/cost on live demo | Pre-run discovery so the feed is warm; use `auto`/`fast` for refresh; show cached results live |
-| Simulang flaky live (focus/refId/permissions) | Re-resolve refs per step; run `simulang setup` beforehand; **Playwright fallback** + cached screenshots |
+| Simulang flaky live (focus/refId/permissions) | Re-resolve refs per step; run `simulang setup` beforehand; ensure `earlybirds-desktop` connected; **Playwright fallback** |
 | Live sites flaky during judging | Pre-tested forms + cached screenshots fallback |
 | Form auth (OAuth, team rosters) | Scope demo to forms without hard auth; Simulang handles in-browser session if needed |
 | Auto-submitting unwanted registrations | Mandatory `awaiting_approval` human gate — never auto-submit |
@@ -704,23 +913,34 @@ Each engineer owns a vertical slice end-to-end so no one is blocked waiting for 
 
 ---
 
-## 12. Open questions
+## 13. Open questions
 
-- Which 2–3 registration form providers do we guarantee for the demo? (Devpost + Google Form are the safe bets.)
-- Which notification channel do we lead with for the demo — Telegram (most visual) or SMS?
-- How much of trip planning is real Exa output vs. deep-linked search?
-- Do we run discovery purely through Exa, or keep one direct Devpost call as a precision backup?
+**Decided**
+- ~~Registration form providers for demo?~~ **Luma** (Simulang local) + **Google Form** (Playwright on Zo).
+  Devpost deferred for *registration* (auth friction).
+- ~~Simulang placement?~~ **Local agent** (`earlybirds-desktop`) on user's machine — their Chrome, their cookies.
+- ~~Discovery sources?~~ **Exa only** for hackathon (domain passes for Luma/Devpost content). Direct Devpost JSON adapter **deferred post-hackathon**.
+- ~~Exa citation drawer?~~ **Yes** — specced in §6.3.0.
+- ~~Profile setup screen?~~ **Yes** — specced in §6.3.3.
+- ~~Notification channel?~~ **Telegram** via Zo — **deferred post-M2** (M4 / optional demo beat).
+
+**Deferred (post-hackathon / M4 if time)**
+- DevpostAdapter — `GET devpost.com/api/hackathons` (undocumented; no official API)
+- Telegram push via Zo (**[ZO PAUSE]** demo beat)
+
+**Still open**
+- *(none blocking M2 demo path)*
 
 ---
 
-## 13. Judging-criteria fit
+## 14. Judging-criteria fit
 
 | Criterion | Weight | How EarlyBirds scores |
 |---|---|---|
-| Proof of Work — Functionality | 25% | Live end-to-end: Exa finds a real event → Simulang fills a real form → confirmation screenshot. Demonstrable, not mocked. |
+| Proof of Work — Functionality | 25% | Live end-to-end: Exa finds a real event → Simulang fills a real form → confirmation screenshot. Primary demo path is **pre-warmed** (cached Exa feed + pre-tested Luma form); live discovery is a secondary beat. |
 | Problem fit & Market value | 25% | Real, acutely-felt pain (missed hackathons, form friction) for exactly the people judging/attending; clear path to a broader "auto-register for any event" product. |
-| Design, Craft & Taste | 20% | Clean feed, "why this one" reasons, and a trust-building review/approve modal with human-in-the-loop. |
-| Innovation & Creative use of sponsor tech | 30% | **Three sponsors are load-bearing** (§2.5): Exa *is* discovery, Simulang *is* the registration moment, Zo makes it run 24/7 and text you — none are bolted on. |
+| Design, Craft & Taste | 20% | Hanken/mono type system (§6.2), Exa citation drawer (§6.3.0), autofill reveal + amber success hero (§6.3), confirm gate with human-in-the-loop. Restrained Linear-like feed; no generic AI aesthetic. |
+| Innovation & Creative use of sponsor tech | 30% | **Three sponsors are load-bearing** (§2.5): Exa *is* discovery (UI citations + API), Simulang *is* the local browser registration moment, Zo hosts always-on pipeline — none are bolted on. |
 
 ---
 
