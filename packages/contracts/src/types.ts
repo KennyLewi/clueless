@@ -104,6 +104,9 @@ export type RegistrationStatus =
   | "queued"
   | "introspecting"
   | "filling"
+  | "needs_input"
+  | "captcha_encountered"
+  | "oauth_redirect"
   | "awaiting_approval"
   | "submitting"
   | "succeeded"
@@ -129,6 +132,15 @@ export interface RegistrationRun {
   updatedAt: string;
 }
 
+// SSE events streamed to the autofill reveal screen (§6.3.1).
+export type RegistrationProgressEvent =
+  | { type: "step_started"; step: string; runner: RegistrationRun["runner"] }
+  | { type: "field_filling"; field: string; label: string }
+  | { type: "field_filled"; field: string; value: string; source: PlannedAction["source"] }
+  | { type: "paused"; reason: "needs_input" | "captcha_encountered" | "oauth_redirect" }
+  | { type: "awaiting_approval"; plannedActions: PlannedAction[] }
+  | { type: "screenshot"; url: string };
+
 // ─── Service interfaces (frozen Day 0) ────────────────────────────────────────
 
 export interface SourceAdapter {
@@ -139,6 +151,13 @@ export interface SourceAdapter {
 export interface RegistrationRunner {
   kind: "playwright" | "simulang";
   introspect(formUrl: string): Promise<FormFieldSpec[]>;
-  fill(run: RegistrationRun): Promise<{ screenshots: string[] }>;
+  fill(run: RegistrationRun, onEvent: (e: RegistrationProgressEvent) => void): Promise<{ screenshots: string[] }>;
   submit(run: RegistrationRun): Promise<{ finalScreenshot: string }>;
+}
+
+// Local bridge contract: earlybirds-desktop ↔ Gateway.
+// Desktop agent connects once per user session; gateway assigns simulang runs to it.
+export interface LocalSimulangBridge {
+  connect(userId: string): Promise<{ sessionId: string }>;
+  executeRun(runId: string, onEvent: (e: RegistrationProgressEvent) => void): Promise<void>;
 }

@@ -34,9 +34,24 @@ export interface FormIntrospectJob {
 
 export interface RegistrationRunJob {
   runId: string;
+  /** Explicit phase tag added by /approve. Absence means fill phase (fresh run or retry). */
+  phase?: "fill" | "submit";
 }
 
 export type NotifyKind = "new_match" | "deadline_7d" | "deadline_2d" | "deadline_12h";
+
+// Shared Redis pub/sub channel names — single source of truth for worker + gateway.
+export function registrationEventChannel(runId: string): string {
+  return `reg:events:${runId}`;
+}
+
+// Terminal RegistrationRun statuses — shared so adding a new terminal state stays in one place.
+export const TERMINAL_STATUSES = ["succeeded", "failed", "cancelled"] as const satisfies RegistrationStatus[];
+
+type RegistrationStatus =
+  | "queued" | "introspecting" | "filling" | "needs_input"
+  | "captcha_encountered" | "oauth_redirect" | "awaiting_approval"
+  | "submitting" | "succeeded" | "failed" | "cancelled";
 
 export interface NotifyEnqueueJob {
   userId: string;

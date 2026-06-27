@@ -3,7 +3,8 @@
   "compilerOptions": {
     "outDir": "dist",
     "paths": {
-      "@earlybirds/contracts": ["../../packages/contracts/src/index.ts"]
+      "@earlybirds/contracts": ["../../packages/contracts/src/index.ts"],
+      "@earlybirds/db": ["../../packages/db/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts"]

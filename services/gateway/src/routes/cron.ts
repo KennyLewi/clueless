@@ -1,42 +1,96 @@
 import type { FastifyPluginAsync } from "fastify";
 import { Queue } from "bullmq";
 import { QUEUE_NAMES } from "@earlybirds/contracts";
-import type { DiscoveryRunJob } from "@earlybirds/contracts";
+import type { DiscoveryRunJob, NotifyEnqueueJob, NotifyKind } from "@earlybirds/contracts";
+import { db } from "@earlybirds/db";
 import { REDIS_URL, CRON_SECRET } from "../config.js";
 
-// Internal endpoints called by Zo Automations on schedule.
-// Protected by X-Cron-Secret preHandler — all routes in this plugin require it.
+function addHours(date: Date, hours: number): Date {
+  return new Date(date.getTime() + hours * 3_600_000);
+}
+
+const DEADLINE_THRESHOLDS: Array<{ hours: number; kind: NotifyKind }> = [
+  { hours: 7 * 24, kind: "deadline_7d" },
+  { hours: 2 * 24, kind: "deadline_2d" },
+  { hours: 12, kind: "deadline_12h" },
+];
+const WINDOW_HOURS = 1;
+
 export const cronRoutes: FastifyPluginAsync = async (server) => {
   const discoveryQueue = new Queue<DiscoveryRunJob>(QUEUE_NAMES.DISCOVERY_RUN, {
     connection: { url: REDIS_URL },
   });
+  const notifyQueue = new Queue<NotifyEnqueueJob>(QUEUE_NAMES.NOTIFY_ENQUEUE, {
+    connection: { url: REDIS_URL },
+  });
 
-  // Registered once at the plugin level — every route added to this plugin
-  // automatically requires a valid X-Cron-Secret header. No per-handler discipline needed.
   server.addHook("preHandler", async (req, reply) => {
-    const secret = req.headers["x-cron-secret"];
-    if (secret !== CRON_SECRET) {
+    if (req.headers["x-cron-secret"] !== CRON_SECRET) {
       reply.status(401);
       return reply.send({ error: "Unauthorized" });
     }
   });
 
-  // POST /internal/cron/discover
-  // Zo Automation fires this every 6h. Kicks discovery pipeline and returns a digest.
   server.post("/discover", {
     handler: async () => {
       await discoveryQueue.add("run", { adapter: "exa" });
-      // TODO(M1): wait briefly for results, return real digest
-      return { newMatches: 0, digest: "Discovery run enqueued." };
+      const newMatches = await db.pendingNotification.count({ where: { sentAt: null } });
+      const digest =
+        newMatches > 0
+          ? `${newMatches} new hackathon match${newMatches !== 1 ? "es" : ""} ready.`
+          : "Discovery run queued — no new matches yet.";
+      return { newMatches, digest };
     },
   });
 
-  // POST /internal/cron/deadlines
-  // Checks for upcoming deadlines and enqueues notify jobs.
   server.post("/deadlines", {
     handler: async () => {
-      // TODO(M1): query DB for deadlines at T-7d / T-2d / T-12h
-      return { checked: 0, notified: 0 };
+      const now = new Date();
+      let checked = 0;
+      let notified = 0;
+
+      for (const threshold of DEADLINE_THRESHOLDS) {
+        const windowStart = addHours(now, threshold.hours - WINDOW_HOURS);
+        const windowEnd = addHours(now, threshold.hours + WINDOW_HOURS);
+
+        const hackathons = await db.hackathon.findMany({
+          where: { registrationClosesAt: { gte: windowStart, lte: windowEnd } },
+          select: { id: true },
+        });
+        checked += hackathons.length;
+        if (hackathons.length === 0) continue;
+
+        const hackathonIds = hackathons.map((h) => h.id);
+
+        // One query for all ranked user–hackathon pairs in scope.
+        const ranked = await db.rankedEvent.findMany({
+          where: { hackathonId: { in: hackathonIds } },
+          select: { userId: true, hackathonId: true },
+        });
+        if (ranked.length === 0) continue;
+
+        // One query to fetch all already-notified pairs — replaces O(H×U) findFirst loop.
+        const userIds = [...new Set(ranked.map((r) => r.userId))];
+        const existingNotifs = await db.pendingNotification.findMany({
+          where: { kind: threshold.kind, payloadRef: { in: hackathonIds }, userId: { in: userIds } },
+          select: { userId: true, payloadRef: true },
+        });
+        const notifiedSet = new Set(existingNotifs.map((n) => `${n.userId}:${n.payloadRef}`));
+
+        for (const { userId, hackathonId } of ranked) {
+          if (notifiedSet.has(`${userId}:${hackathonId}`)) continue;
+          await notifyQueue.add("enqueue", {
+            userId,
+            kind: threshold.kind,
+            payloadRef: hackathonId,
+          }, {
+            jobId: `notify:${userId}:${threshold.kind}:${hackathonId}`,
+          });
+          notified++;
+        }
+      }
+
+      return { checked, notified };
     },
   });
 };

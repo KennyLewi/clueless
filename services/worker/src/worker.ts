@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { Worker } from "bullmq";
 import { QUEUE_NAMES } from "@earlybirds/contracts";
+import { REDIS_URL } from "./config.js";
 import type {
   DiscoveryRunJob,
   NormalizeListingJob,
@@ -10,13 +11,12 @@ import type {
   NotifyEnqueueJob,
 } from "@earlybirds/contracts";
 import { handleDiscovery } from "./handlers/discovery.js";
-import { handleNormalize } from "./handlers/normalize.js";
-import { handleRank } from "./handlers/rank.js";
+import { handleNormalize, rankQueue, formQueue } from "./handlers/normalize.js";
+import { handleRank, notifyQueue } from "./handlers/rank.js";
 import { handleFormIntrospect } from "./handlers/formIntrospect.js";
 import { handleRegistration } from "./handlers/registration.js";
 import { handleNotify } from "./handlers/notify.js";
 
-const REDIS_URL = process.env["REDIS_URL"] ?? "redis://localhost:6379";
 const connection = { url: REDIS_URL };
 
 const workers = [
@@ -28,11 +28,17 @@ const workers = [
   new Worker<NotifyEnqueueJob>(QUEUE_NAMES.NOTIFY_ENQUEUE, handleNotify, { connection }),
 ];
 
+// Queue instances opened by handlers — close them alongside workers on shutdown.
+const queues = [rankQueue, formQueue, notifyQueue];
+
 console.log("Workers started for queues:", Object.values(QUEUE_NAMES).join(", "));
 
 const shutdown = async () => {
   console.log("Shutting down workers...");
-  await Promise.all(workers.map((w) => w.close()));
+  await Promise.all([
+    ...workers.map((w) => w.close()),
+    ...queues.map((q) => q.close()),
+  ]);
   process.exit(0);
 };
 
