@@ -1,28 +1,29 @@
 import crypto from "node:crypto";
+import { Exa, type DeepObjectOutputSchema } from "exa-js";
 import { EXA_OUTPUT_SCHEMA } from "@earlybirds/contracts";
 import type { SourceAdapter, RawListing } from "@earlybirds/contracts";
 
-const EXA_BASE_URL = "https://api.exa.ai";
 const FIXTURE_PATH = new URL("../../../../fixtures/exa-response.json", import.meta.url);
 
-// Exa /search response with outputSchema: structured data lives directly in
-// `output` (matching the schema shape), alongside the standard `results[]` array.
-interface ExaSearchResult {
-  results?: Array<{ url: string; title: string }>;
+// Shape of output.content after Exa applies our EXA_OUTPUT_SCHEMA.
+interface ExaOutputContent {
+  events?: Array<{
+    title: string;
+    url: string;
+    registrationUrl?: string;
+    startsAt?: string;
+    registrationClosesAt?: string;
+    location?: string;
+    themes?: string[];
+    description?: string;
+    organizer?: string;
+  }>;
+}
+
+// Fixture type matches the live SearchResponse shape.
+interface ExaFixture {
   output?: {
-    events?: Array<{
-      title: string;
-      url: string;
-      registrationUrl?: string;
-      startsAt?: string;
-      registrationClosesAt?: string;
-      location?: string;
-      themes?: string[];
-      eligibility?: string;
-      description?: string;
-      organizer?: string;
-      prizes?: string;
-    }>;
+    content?: ExaOutputContent;
   };
 }
 
@@ -33,23 +34,26 @@ export interface ExaAdapterOptions {
 export class ExaAdapter implements SourceAdapter {
   readonly source = "exa" as const;
 
-  private readonly apiKey: string | undefined;
+  private readonly client: Exa | null;
   private readonly useFixture: boolean;
   private readonly includeDomains: string[] | undefined;
 
   constructor(opts: ExaAdapterOptions = {}) {
-    this.apiKey = process.env["EXA_API_KEY"];
-    this.useFixture = !this.apiKey;
+    const apiKey = process.env["EXA_API_KEY"];
+    this.useFixture = !apiKey;
+    this.client = apiKey ? new Exa(apiKey) : null;
     this.includeDomains = opts.includeDomains;
     if (this.useFixture) {
       console.warn("[exa] No EXA_API_KEY found — using fixture data.");
     }
   }
 
-  async discover(cursor?: string): Promise<{ listings: RawListing[]; nextCursor?: string }> {
-    const raw = this.useFixture ? await this.loadFixture() : await this.fetchFromExa(cursor);
-    // Structured events live at output.events (matching the outputSchema shape).
-    const events = raw.output?.events ?? [];
+  async discover(_cursor?: string): Promise<{ listings: RawListing[]; nextCursor?: string }> {
+    const content = this.useFixture
+      ? await this.loadFixtureContent()
+      : await this.fetchFromExa();
+
+    const events = content?.events ?? [];
     const now = new Date().toISOString();
 
     const listings: RawListing[] = events.map((event) => ({
@@ -62,10 +66,8 @@ export class ExaAdapter implements SourceAdapter {
         registrationClosesAt: event.registrationClosesAt,
         location: event.location,
         themes: event.themes ?? [],
-        eligibility: event.eligibility,
         description: event.description,
         organizer: event.organizer,
-        prizes: event.prizes,
       },
       rawPayloadRef: `exa:${crypto.createHash("sha1").update(event.url).digest("hex")}`,
       scrapedAt: now,
@@ -74,44 +76,27 @@ export class ExaAdapter implements SourceAdapter {
     return { listings };
   }
 
-  private async fetchFromExa(cursor?: string): Promise<ExaSearchResult> {
-    const body: Record<string, unknown> = {
-      query: "upcoming hackathons open for registration AI fintech blockchain 2026",
-      type: "deep",
-      numResults: 25,
-      contents: { highlights: true },
-      outputSchema: EXA_OUTPUT_SCHEMA,
-    };
-
-    if (this.includeDomains && this.includeDomains.length > 0) {
-      body["includeDomains"] = this.includeDomains;
-    }
-
-    // cursor is an opaque page token returned by a previous Exa response.
-    if (cursor) {
-      body["cursor"] = cursor;
-    }
-
-    const res = await fetch(`${EXA_BASE_URL}/search`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": this.apiKey!, // verified: Exa uses x-api-key, not Authorization: Bearer
+  private async fetchFromExa(): Promise<ExaOutputContent | undefined> {
+    const results = await this.client!.search(
+      "upcoming hackathons open for registration AI fintech blockchain 2026",
+      {
+        type: "deep",
+        numResults: 25,
+        systemPrompt:
+          "Find hackathon events. Prefer official event pages and organizer announcements. Collapse duplicates from the same event. Ignore meetups, webinars, and competitions that are not hackathons.",
+        outputSchema: EXA_OUTPUT_SCHEMA as unknown as DeepObjectOutputSchema,
+        contents: { highlights: true },
+        ...(this.includeDomains?.length ? { includeDomains: this.includeDomains } : {}),
       },
-      body: JSON.stringify(body),
-    });
+    );
 
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Exa search failed: ${res.status} ${text}`);
-    }
-
-    return res.json() as Promise<ExaSearchResult>;
+    return results.output?.content as ExaOutputContent | undefined;
   }
 
-  private async loadFixture(): Promise<ExaSearchResult> {
+  private async loadFixtureContent(): Promise<ExaOutputContent | undefined> {
     const { readFile } = await import("node:fs/promises");
     const raw = await readFile(FIXTURE_PATH, "utf-8");
-    return JSON.parse(raw) as ExaSearchResult;
+    const fixture = JSON.parse(raw) as ExaFixture;
+    return fixture.output?.content;
   }
 }

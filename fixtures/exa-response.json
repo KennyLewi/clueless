@@ -3,7 +3,8 @@
   "requestedAt": "2026-06-27T00:00:00Z",
   "query": "upcoming hackathons open for registration AI fintech blockchain 2026",
   "output": {
-    "events": [
+    "content": {
+      "events": [
         {
           "title": "Global AI Hackathon 2026",
           "url": "https://devpost.com/hackathons/global-ai-2026",
@@ -12,10 +13,8 @@
           "registrationClosesAt": "2026-08-10T23:59:59Z",
           "location": "Online",
           "themes": ["ai", "machine-learning", "nlp"],
-          "eligibility": "Open to all students and professionals worldwide",
           "description": "Build the next generation of AI-powered applications in 48 hours. $50,000 in prizes.",
-          "organizer": "Devpost Inc.",
-          "prizes": "$50,000 total — $20k first, $15k second, $10k third, $5k sponsor"
+          "organizer": "Devpost Inc."
         },
         {
           "title": "FinTech Hack Singapore 2026",
@@ -25,10 +24,8 @@
           "registrationClosesAt": "2026-09-01T23:59:59Z",
           "location": "Singapore, SG",
           "themes": ["fintech", "payments", "blockchain", "ai"],
-          "eligibility": "Open to all, teams of 2–5",
-          "description": "Two-day in-person hackathon at Marina Bay Sands. Build the future of financial services in Southeast Asia.",
-          "organizer": "MAS x DBS",
-          "prizes": "SGD $30,000 total"
+          "description": "Two-day in-person hackathon at Marina Bay Sands. SGD $30,000 in prizes.",
+          "organizer": "MAS x DBS"
         },
         {
           "title": "Web3 Builder Weekend — Hong Kong",
@@ -38,10 +35,8 @@
           "registrationClosesAt": "2026-07-15T23:59:59Z",
           "location": "Hong Kong",
           "themes": ["web3", "blockchain", "defi", "ai"],
-          "eligibility": "Open to developers, designers, and entrepreneurs",
-          "description": "Weekend hackathon hosted by Cyberport. Build decentralized apps with real-world impact.",
-          "organizer": "Cyberport Hong Kong",
-          "prizes": "HKD $100,000 in prizes + Cyberport incubation"
+          "description": "Weekend hackathon hosted by Cyberport. HKD $100,000 in prizes + incubation.",
+          "organizer": "Cyberport Hong Kong"
         },
         {
           "title": "Google Forms Demo Hackathon",
@@ -51,11 +46,22 @@
           "registrationClosesAt": "2026-07-20T23:59:59Z",
           "location": "Online",
           "themes": ["ai", "education", "productivity"],
-          "eligibility": "Students only",
           "description": "Fixture event using a Google Form for registration — used for PlaywrightRunner demo testing.",
-          "organizer": "EarlyBirds Demo",
-          "prizes": "Demo only"
+          "organizer": "EarlyBirds Demo"
         }
+      ]
+    },
+    "grounding": [
+      {
+        "field": "events[0].title",
+        "citations": [{ "url": "https://devpost.com/hackathons/global-ai-2026", "title": "Global AI Hackathon 2026 — Devpost" }],
+        "confidence": "high"
+      },
+      {
+        "field": "events[1].registrationClosesAt",
+        "citations": [{ "url": "https://lu.ma/fintech-hack-sg-2026", "title": "FinTech Hack Singapore 2026 — Luma" }],
+        "confidence": "medium"
+      }
     ]
   }
 }

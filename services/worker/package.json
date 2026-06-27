@@ -10,6 +10,7 @@
   "dependencies": {
     "@earlybirds/contracts": "*",
     "bullmq": "^5.34.6",
+    "exa-js": "2.14.0",
     "ioredis": "^5.4.1",
     "dotenv": "^16.4.7"
   },

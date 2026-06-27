@@ -4,8 +4,8 @@ import { z } from "zod";
 
 export const ExaGroundingSchema = z.object({
   field: z.string(),
-  citations: z.array(z.string()),
-  confidence: z.number().min(0).max(1),
+  citations: z.array(z.object({ url: z.string(), title: z.string() })),
+  confidence: z.enum(["high", "medium", "low"]),
 });
 
 export const SourceRefSchema = z.object({
@@ -125,27 +125,29 @@ export const RegistrationRunSchema = z.object({
 });
 
 // Exa outputSchema — sent verbatim in the Exa API request body.
+// Docs: max nesting depth 2, max total properties 10. Do NOT add citation/confidence
+// fields — Exa returns grounding data automatically alongside output.content.
 export const EXA_OUTPUT_SCHEMA = {
   type: "object",
+  description: "Hackathon events extracted from search results",
   required: ["events"],
   properties: {
     events: {
       type: "array",
+      description: "List of hackathon events found",
       items: {
         type: "object",
         required: ["title", "url"],
         properties: {
-          title: { type: "string" },
-          url: { type: "string" },
-          registrationUrl: { type: "string" },
-          startsAt: { type: "string" },
-          registrationClosesAt: { type: "string" },
-          location: { type: "string" },
-          themes: { type: "array", items: { type: "string" } },
-          eligibility: { type: "string" },
-          description: { type: "string" },
-          organizer: { type: "string" },
-          prizes: { type: "string" },
+          title: { type: "string", description: "Full name of the hackathon" },
+          url: { type: "string", description: "Canonical landing page URL" },
+          registrationUrl: { type: "string", description: "Direct registration form URL if different from url" },
+          startsAt: { type: "string", description: "Event start date/time in ISO 8601" },
+          registrationClosesAt: { type: "string", description: "Registration deadline in ISO 8601" },
+          location: { type: "string", description: "City/country or 'Online'" },
+          themes: { type: "array", items: { type: "string" }, description: "Topic tags e.g. ai, fintech, web3" },
+          description: { type: "string", description: "Brief event description including prizes" },
+          organizer: { type: "string", description: "Organizing entity or company" },
         },
       },
     },

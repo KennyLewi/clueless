@@ -10,8 +10,8 @@ export type RegistrationProvider =
 
 export interface ExaGrounding {
   field: string;
-  citations: string[];
-  confidence: number; // 0..1
+  citations: Array<{ url: string; title: string }>;
+  confidence: "high" | "medium" | "low";
 }
 
 export interface SourceRef {
