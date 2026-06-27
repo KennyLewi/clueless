@@ -222,3 +222,67 @@ export const AUTOFILL_FIELDS: FieldView[] = [
 export const NEXT_MATCHES = ["treehacks", "calhacks"]
   .map(eventById)
   .filter((e): e is Hackathon => !!e);
+
+// ── Onboarding / profile voice ───────────────────────────────────────────────
+export const INTERESTS = [
+  "AI", "Climate", "Fintech", "DevTools", "Health", "Hardware", "Crypto", "Education", "Something new to me",
+];
+
+export const VOICE = {
+  oneLiner: "CS junior who likes shipping playful, polished products fast.",
+  proudProject: "A 4-player co-op puzzle game built in a weekend with Godot — shipped to 3k plays, learned to cut scope ruthlessly.",
+  outsideLane: "Curious about fintech & payments.",
+};
+
+export const WRITING_SAMPLES = [
+  { name: "Devpost project README", meta: "312 words · pasted" },
+  { name: "Scholarship essay", meta: "488 words · pasted" },
+];
+
+// ── Registrations dashboard ──────────────────────────────────────────────────
+export interface RegRow {
+  rowId: string;
+  eventId: string;
+  status: "registered" | "awaiting" | "needsinput" | "filling" | "paused" | "failed";
+  deadlineLabel?: string;
+}
+
+export const REGISTRATIONS: RegRow[] = [
+  { rowId: "r1", eventId: "treehacks", status: "awaiting" },
+  { rowId: "r2", eventId: "fintech", status: "paused" },
+  { rowId: "r3", eventId: "pioneer", status: "registered", deadlineLabel: "submitted" },
+  { rowId: "r4", eventId: "ethbangkok", status: "needsinput" },
+  { rowId: "r5", eventId: "calhacks", status: "filling" },
+  { rowId: "r6", eventId: "treehacks", status: "failed" },
+];
+
+// ── Notifications ────────────────────────────────────────────────────────────
+export const NOTIF_COLOR: Record<string, string> = {
+  needs: "#D9920F",
+  awaiting: "#D9920F",
+  success: "#1D9E75",
+  deadline: "#97918A",
+  found: "#1D9E75",
+};
+
+export const NOTIFS = [
+  { time: "2m ago", type: "needs", text: "ETHGlobal Bangkok needs your input — team status." },
+  { time: "1h ago", type: "success", text: "You're registered for MLH Spring Kickoff." },
+  { time: "3h ago", type: "awaiting", text: "TreeHacks 2026 is filled and ready for your approval." },
+  { time: "1d ago", type: "deadline", text: "Cal Hacks 12.0 closes in 5 days." },
+  { time: "2d ago", type: "found", text: "3 new events matched your profile." },
+];
+
+// ── Settings ─────────────────────────────────────────────────────────────────
+export const SETTING_DEFS = [
+  { key: "requireApproval", label: "Require my approval before submitting", desc: "The agent fills forms but never submits until you confirm.", on: true },
+  { key: "inferAnswers", label: "Let the agent draft open-ended answers", desc: 'Drafts answers like "Why do you want to join?" for your review.', on: true },
+  { key: "notifyClosing", label: "Notify me before deadlines", desc: "Heads-up 48 hours before a matched event closes.", on: true },
+  { key: "batch", label: "Batch auto-register", desc: "Queue several matched events and register in one run.", on: false },
+];
+
+export const CONN_DEFS = [
+  { key: "github", name: "GitHub", detail: "github.com/mayac", on: true },
+  { key: "google", name: "Google", detail: "Calendar + email sync", on: false },
+  { key: "resume", name: "Résumé", detail: "maya-chen-resume.pdf", on: true },
+];

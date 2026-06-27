@@ -221,7 +221,14 @@ export default function RegisterTakeoverPage() {
   }, [eventId, event]);
 
   useEffect(() => {
-    // Initial auto-advance filling → needs input (mirrors the agent hitting a gap).
+    // Deep link from the registrations dashboard (?step=) jumps straight to a state.
+    const param = new URLSearchParams(window.location.search).get("step");
+    const valid: AfStep[] = ["filling", "needsinput", "captcha", "oauth", "awaiting", "submitting", "success", "failed"];
+    if (param && valid.includes(param as AfStep)) {
+      setAf(param as AfStep);
+      return;
+    }
+    // Otherwise auto-advance filling → needs input (mirrors the agent hitting a gap).
     const t = window.setTimeout(() => setAf("needsinput"), 2600);
     timers.current.push(t);
     return clearTimers;

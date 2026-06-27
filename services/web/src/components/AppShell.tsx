@@ -24,11 +24,11 @@ interface NavDef {
 
 const NAV: NavDef[] = [
   { href: "/", label: "Discover", icon: <IconDiscover />, match: (p) => p === "/" || p.startsWith("/events") },
-  { label: "Saved", icon: <IconSaved /> },
+  { href: "/saved", label: "Saved", icon: <IconSaved />, match: (p) => p.startsWith("/saved") },
   { href: "/registrations", label: "Registrations", icon: <IconRegs />, match: (p) => p.startsWith("/registrations") },
-  { label: "Notifications", icon: <IconNotif /> },
+  { href: "/notifications", label: "Notifications", icon: <IconNotif />, match: (p) => p.startsWith("/notifications") },
   { href: "/profile", label: "Profile", icon: <IconProfile />, match: (p) => p.startsWith("/profile") },
-  { label: "Settings", icon: <IconSettings /> },
+  { href: "/settings", label: "Settings", icon: <IconSettings />, match: (p) => p.startsWith("/settings") },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
