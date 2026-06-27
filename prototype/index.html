@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EarlyBirds</title>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --text: #1A1714; --muted: #6B6560; --bg: #F6F4F1; --card: #FFFFFF; --panel: #FBFAF8;
+  --border: #E9E5DF; --teal-fill: #0F6E56; --teal: #1D9E75; --teal-tint: #EAF4EF;
+  --amber-bg: #FBEEDB; --amber-text: #7A4A06; --chip-text: #B5740E; --chip-dot: #D9920F;
+  --fail: #C2503E; --r-btn: 10px; --r-card: 16px;
+  --font: 'Hanken Grotesk', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', monospace;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); min-width: 720px; line-height: 1.5; font-size: 14px; }
+.mono { font-family: var(--mono); }
+.hidden { display: none !important; }
+
+/* Bird mark */
+.bird { stroke: var(--teal-fill); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.logo { display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 15px; }
+.logo svg { width: 28px; height: 28px; }
+
+/* Buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 16px; border-radius: var(--r-btn); font-family: var(--font); font-size: 14px; font-weight: 500; cursor: pointer; border: none; transition: opacity .15s; }
+.btn:hover { opacity: .88; }
+.btn-primary { background: var(--teal-fill); color: #fff; }
+.btn-outline { background: transparent; color: var(--teal-fill); border: 1.5px solid var(--teal); }
+.btn-ghost { background: transparent; color: var(--muted); border: none; padding: 8px 12px; }
+.btn-sm { padding: 6px 12px; font-size: 13px; }
+.btn:disabled, .btn.locked { opacity: .45; cursor: not-allowed; }
+.link { color: var(--teal); cursor: pointer; background: none; border: none; font-family: var(--font); font-size: 13px; text-decoration: none; }
+.link:hover { text-decoration: underline; }
+
+/* Layout */
+.app { display: flex; min-height: 100vh; }
+.sidebar { width: 220px; background: var(--card); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px 12px; flex-shrink: 0; }
+.sidebar .logo { padding: 0 8px 20px; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--r-btn); cursor: pointer; color: var(--muted); font-weight: 500; margin-bottom: 2px; }
+.nav-item:hover { background: var(--panel); color: var(--text); }
+.nav-item.active { background: var(--teal-tint); color: var(--teal-fill); }
+.nav-item .badge { margin-left: auto; background: var(--teal-fill); color: #fff; font-size: 11px; padding: 2px 7px; border-radius: 99px; font-family: var(--mono); }
+.sidebar-spacer { flex: 1; }
+.user-chip { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--border); margin-top: 12px; }
+.avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--teal-tint); color: var(--teal-fill); display: flex; align-items: center; justify-content: center; font-weight: 500; font-size: 13px; }
+.main { flex: 1; overflow: auto; }
+.screen { display: none; min-height: 100vh; }
+.screen.active { display: block; }
+.content { padding: 32px 40px; max-width: 960px; }
+.content-wide { max-width: 1100px; }
+
+/* Cards */
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card); padding: 20px; }
+.card-panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-card); padding: 16px; }
+
+/* Auth / onboarding full-page */
+.full-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 40px; }
+.auth-box { width: 100%; max-width: 400px; }
+.auth-box h1 { font-size: 24px; font-weight: 500; margin-bottom: 8px; }
+.auth-box .sub { color: var(--muted); margin-bottom: 28px; }
+.field { margin-bottom: 16px; }
+.field label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+.field input, .field textarea, .field select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-btn); font-family: var(--font); font-size: 14px; background: var(--card); color: var(--text); }
+.field input:focus, .field textarea:focus { outline: none; border-color: var(--teal); }
+.divider { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; margin: 20px 0; }
+.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.oauth-btns { display: flex; flex-direction: column; gap: 10px; }
+.oauth-btn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: var(--r-btn); background: var(--card); cursor: pointer; font-family: var(--font); font-size: 14px; font-weight: 500; }
+.oauth-btn:hover { background: var(--panel); }
+.trust-line { text-align: center; color: var(--muted); font-size: 12px; margin-top: 24px; }
+
+/* Connect cards */
+.connect-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 28px 0; }
+.connect-card { border: 1px solid var(--border); border-radius: var(--r-card); padding: 24px; background: var(--card); cursor: pointer; transition: border-color .15s; }
+.connect-card:hover { border-color: var(--teal); }
+.connect-card.connected { border-color: var(--teal); background: var(--teal-tint); }
+.connect-card h3 { font-size: 15px; font-weight: 500; margin-bottom: 6px; }
+.connect-card p { color: var(--muted); font-size: 13px; }
+
+/* Profile basics */
+.meter { margin-bottom: 24px; }
+.meter-bar { height: 6px; background: var(--border); border-radius: 99px; overflow: hidden; margin-top: 8px; }
+.meter-fill { height: 100%; background: var(--teal); border-radius: 99px; transition: width .3s; }
+.tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.tag { padding: 6px 12px; border: 1px solid var(--border); border-radius: 99px; font-size: 13px; cursor: pointer; background: var(--card); }
+.tag.selected { background: var(--teal-tint); border-color: var(--teal); color: var(--teal-fill); }
+.actions-row { display: flex; gap: 12px; margin-top: 28px; align-items: center; }
+
+/* Voice cards */
+.voice-stack { max-width: 520px; margin: 0 auto; }
+.voice-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card); padding: 32px; min-height: 320px; display: flex; flex-direction: column; }
+.voice-card h2 { font-size: 20px; font-weight: 500; margin-bottom: 20px; }
+.progress-dots { display: flex; gap: 8px; justify-content: center; margin-top: 24px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+.dot.active { background: var(--teal); }
+.dot.done { background: var(--teal); opacity: .5; }
+.collapse-section { margin-top: 32px; border-top: 1px solid var(--border); padding-top: 16px; }
+.collapse-header { cursor: pointer; color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.collapse-body { margin-top: 12px; }
+.voice-actions { margin-top: auto; padding-top: 24px; display: flex; gap: 12px; align-items: center; }
+
+/* Feed */
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+.page-header h1 { font-size: 22px; font-weight: 500; }
+.search-bar { display: flex; gap: 12px; margin-bottom: 16px; }
+.search-bar input { flex: 1; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--r-btn); font-family: var(--font); background: var(--card); }
+.filter-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+.filter-chip { padding: 6px 14px; border-radius: 99px; border: 1px solid var(--border); background: var(--card); font-size: 13px; cursor: pointer; }
+.filter-chip.active { background: var(--teal-tint); border-color: var(--teal); color: var(--teal-fill); }
+.event-list { display: flex; flex-direction: column; gap: 12px; }
+.event-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card); padding: 20px; cursor: pointer; transition: border-color .15s; }
+.event-card:hover { border-color: var(--teal); }
+.event-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.event-card h3 { font-size: 16px; font-weight: 500; margin-bottom: 4px; }
+.event-meta { color: var(--muted); font-size: 13px; }
+.event-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.badge { font-size: 11px; padding: 3px 8px; border-radius: 6px; font-family: var(--mono); font-weight: 500; }
+.badge-exa { background: var(--teal-tint); color: var(--teal-fill); }
+.badge-merged { background: var(--panel); color: var(--muted); border: 1px solid var(--border); }
+.stretch-reason { color: var(--muted); font-size: 13px; margin-top: 8px; font-style: normal; }
+.event-card-actions { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.save-toggle { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 4px; font-family: var(--font); }
+.save-toggle.saved { color: var(--teal-fill); }
+.toggle-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.toggle { width: 36px; height: 20px; background: var(--border); border-radius: 99px; position: relative; cursor: pointer; }
+.toggle.on { background: var(--teal); }
+.toggle::after { content: ''; position: absolute; width: 16px; height: 16px; background: #fff; border-radius: 50%; top: 2px; left: 2px; transition: left .15s; }
+.toggle.on::after { left: 18px; }
+
+/* Event detail */
+.back-link { color: var(--muted); cursor: pointer; font-size: 13px; margin-bottom: 20px; display: inline-block; }
+.back-link:hover { color: var(--text); }
+.detail-hero { margin-bottom: 24px; }
+.detail-hero h1 { font-size: 26px; font-weight: 500; margin-bottom: 8px; }
+.countdown { font-family: var(--mono); color: var(--teal-fill); font-size: 14px; margin-bottom: 16px; }
+.match-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+.pill { padding: 6px 12px; border-radius: 99px; font-size: 13px; background: var(--teal-tint); color: var(--teal-fill); }
+.pill-stretch { background: var(--panel); color: var(--muted); border: 1px solid var(--border); }
+.exa-drawer { border: 1px solid var(--border); border-radius: var(--r-card); overflow: hidden; margin-bottom: 24px; }
+.exa-drawer-header { padding: 14px 16px; background: var(--panel); cursor: pointer; display: flex; justify-content: space-between; font-weight: 500; font-size: 14px; }
+.exa-drawer-body { padding: 16px; border-top: 1px solid var(--border); }
+.exa-query { background: var(--panel); padding: 12px; border-radius: var(--r-btn); font-family: var(--mono); font-size: 12px; color: var(--muted); margin-bottom: 12px; word-break: break-all; }
+.citation { display: flex; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.citation:last-child { border-bottom: none; }
+.citation-label { font-family: var(--mono); font-size: 11px; color: var(--muted); min-width: 80px; }
+.citation-url { color: var(--teal); word-break: break-all; }
+
+/* Autofill takeover */
+.autofill { position: fixed; inset: 0; background: var(--bg); z-index: 100; display: none; flex-direction: column; }
+.autofill.active { display: flex; }
+.autofill-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid var(--border); background: var(--card); }
+.status-pill { font-family: var(--mono); font-size: 12px; padding: 4px 10px; border-radius: 99px; background: var(--teal-tint); color: var(--teal-fill); }
+.status-pill.paused { background: var(--amber-bg); color: var(--amber-text); }
+.autofill-context { padding: 16px 24px; border-bottom: 1px solid var(--border); background: var(--card); }
+.autofill-context h2 { font-size: 16px; font-weight: 500; }
+.autofill-context .deadline { font-family: var(--mono); font-size: 13px; color: var(--muted); margin-top: 4px; }
+.autofill-body { flex: 1; display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; }
+.form-column { padding: 24px; overflow-y: auto; border-right: 1px solid var(--border); }
+.agent-column { padding: 24px; overflow-y: auto; background: var(--panel); }
+.form-field { margin-bottom: 20px; position: relative; }
+.form-field label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+.form-field .value { font-family: var(--mono); font-size: 13px; padding: 10px 36px 10px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-btn); min-height: 40px; word-break: break-word; }
+.form-field .value.empty { color: var(--muted); border-style: dashed; }
+.form-field .check { position: absolute; right: 10px; top: 34px; color: var(--teal); font-size: 16px; opacity: 0; }
+.form-field.done .check { opacity: 1; }
+.form-field.done .value { border-color: var(--teal); background: var(--teal-tint); }
+.source-chip { display: inline-block; font-family: var(--mono); font-size: 10px; padding: 2px 6px; border-radius: 4px; margin-top: 4px; background: var(--teal-tint); color: var(--teal-fill); }
+.source-chip.default { background: var(--panel); color: var(--muted); }
+.source-chip.inferred { background: transparent; color: var(--chip-text); }
+.source-chip.inferred::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--chip-dot); margin-right: 4px; vertical-align: middle; }
+.source-chip.draft { background: transparent; color: var(--chip-text); }
+.draft-textarea { width: 100%; min-height: 100px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-btn); font-family: var(--mono); font-size: 13px; resize: vertical; background: var(--card); }
+.draft-actions { margin-top: 6px; display: flex; gap: 12px; }
+.pause-banner { background: var(--amber-bg); border: 1px solid #E8D5B8; border-radius: var(--r-btn); padding: 14px 16px; margin-bottom: 20px; color: var(--amber-text); font-size: 14px; }
+.needs-input-box { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-btn); padding: 16px; margin-bottom: 20px; }
+.needs-input-box strong { font-weight: 500; }
+.agent-log { font-family: var(--mono); font-size: 12px; line-height: 1.8; color: var(--muted); }
+.agent-log .step { margin-bottom: 4px; }
+.agent-log .step.active { color: var(--teal-fill); }
+.agent-log .step.done { color: var(--text); }
+.autofill-footer { padding: 16px 24px; border-top: 1px solid var(--border); background: var(--card); display: flex; align-items: center; justify-content: space-between; }
+.footer-note { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+.footer-note.ready { color: var(--teal-fill); }
+.footer-actions { display: flex; gap: 12px; }
+
+/* Success / failed states in autofill */
+.success-view, .failed-view { flex: 1; overflow-y: auto; padding: 32px 40px; }
+.amber-hero { background: var(--amber-bg); border-radius: var(--r-card); padding: 40px; text-align: center; margin-bottom: 24px; }
+.amber-hero h2 { font-size: 24px; font-weight: 500; color: var(--amber-text); margin: 16px 0 8px; }
+.amber-hero .confirm-code { font-family: var(--mono); font-size: 14px; color: var(--amber-text); opacity: .8; }
+.bird-animate { animation: flyIn .6s ease-out once; }
+@keyframes flyIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.details-card { margin-bottom: 24px; }
+.next-matches { border-top: 1px solid var(--border); padding-top: 24px; }
+.next-matches h3 { font-size: 14px; font-weight: 500; color: var(--muted); margin-bottom: 12px; }
+.mini-cards { display: flex; gap: 12px; }
+.mini-card { flex: 1; border: 1px solid var(--border); border-radius: var(--r-card); padding: 14px; background: var(--card); }
+.mini-card h4 { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+.mini-card .deadline { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+.failed-view .error-box { background: #FDF2F0; border: 1px solid #F0D4CF; border-radius: var(--r-card); padding: 20px; color: var(--fail); margin-bottom: 20px; }
+.error-code { font-family: var(--mono); font-size: 12px; margin-top: 8px; }
+
+/* Registrations */
+.tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+.tab { padding: 10px 16px; cursor: pointer; color: var(--muted); font-weight: 500; font-size: 13px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab.active { color: var(--teal-fill); border-bottom-color: var(--teal); }
+.reg-row { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; border-bottom: 1px solid var(--border); }
+.reg-row:last-child { border-bottom: none; }
+.reg-info h4 { font-size: 14px; font-weight: 500; }
+.reg-info p { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.status-pill-row { font-family: var(--mono); font-size: 11px; padding: 4px 10px; border-radius: 99px; }
+.status-awaiting { background: var(--teal-tint); color: var(--teal-fill); }
+.status-needs { background: var(--amber-bg); color: var(--amber-text); }
+.status-paused { background: var(--amber-bg); color: var(--amber-text); }
+.status-success { background: var(--teal-tint); color: var(--teal-fill); }
+.status-failed { background: #FDF2F0; color: var(--fail); }
+.status-filling { background: var(--panel); color: var(--muted); border: 1px solid var(--border); }
+
+/* Notifications */
+.notif-item { display: flex; gap: 14px; padding: 16px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+.notif-item:hover { opacity: .85; }
+.notif-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--teal); margin-top: 6px; flex-shrink: 0; }
+.notif-dot.read { background: var(--border); }
+.notif-body h4 { font-size: 14px; font-weight: 500; }
+.notif-body p { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.notif-time { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-left: auto; flex-shrink: 0; }
+
+/* Profile sections */
+.section { margin-bottom: 32px; }
+.section h2 { font-size: 16px; font-weight: 500; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.section-grid { display: grid; grid-template-columns: 140px 1fr; gap: 12px 20px; font-size: 14px; }
+.section-grid .label { color: var(--muted); }
+.editable { cursor: pointer; border-bottom: 1px dashed transparent; }
+.editable:hover { border-bottom-color: var(--border); }
+.sample-item { padding: 12px; background: var(--panel); border-radius: var(--r-btn); margin-bottom: 8px; font-size: 13px; color: var(--muted); }
+
+/* Settings */
+.setting-row { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; border-bottom: 1px solid var(--border); }
+.setting-row:last-child { border-bottom: none; }
+.setting-info h4 { font-size: 14px; font-weight: 500; }
+.setting-info p { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.connected-account { display: flex; align-items: center; gap: 10px; padding: 10px 0; }
+.connected-account .status { font-family: var(--mono); font-size: 11px; color: var(--teal); }
+
+/* Debug panel */
+.debug-panel { position: fixed; bottom: 16px; right: 16px; z-index: 200; background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card); padding: 12px; box-shadow: 0 4px 20px rgba(26,23,20,.12); max-width: 280px; }
+.debug-panel h4 { font-size: 11px; font-family: var(--mono); color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .05em; }
+.debug-btns { display: flex; flex-wrap: wrap; gap: 4px; }
+.debug-btn { font-family: var(--mono); font-size: 10px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); cursor: pointer; }
+.debug-btn:hover { border-color: var(--teal); color: var(--teal-fill); }
+.debug-btn.active { background: var(--teal-tint); border-color: var(--teal); color: var(--teal-fill); }
+.debug-nav { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.degraded-hint { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-btn); padding: 10px 14px; font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+.empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+.empty-state h3 { font-size: 16px; font-weight: 500; color: var(--text); margin-bottom: 8px; }
+</style>
+</head>
+<body>
+
+<!-- Auth -->
+<div id="screen-auth" class="screen active">
+  <div class="full-page">
+    <div class="auth-box">
+      <div class="logo" style="margin-bottom:28px"><svg viewBox="0 0 28 28"><path class="bird" d="M4 18 L14 6 L14 11 L24 18"/></svg> EarlyBirds</div>
+      <h1>Find hackathons. Register once.</h1>
+      <p class="sub">AI-powered discovery and auto-registration.</p>
+      <div class="field"><label>Email</label><input type="email" placeholder="you@school.edu" value="alex@school.edu"></div>
+      <button class="btn btn-primary" style="width:100%" onclick="goTo('connect')">Continue with email</button>
+      <div class="divider">or</div>
+      <div class="oauth-btns">
+        <button class="oauth-btn" onclick="goTo('connect')">Continue with Google</button>
+        <button class="oauth-btn" onclick="goTo('connect')">Continue with GitHub</button>
+      </div>
+      <p class="trust-line">We never submit anything without your confirmation.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Connect -->
+<div id="screen-connect" class="screen">
+  <div class="full-page">
+    <div style="max-width:720px;width:100%">
+      <div class="logo" style="margin-bottom:28px"><svg viewBox="0 0 28 28"><path class="bird" d="M4 18 L14 6 L14 11 L24 18"/></svg> EarlyBirds</div>
+      <h1 style="font-size:24px;font-weight:500;margin-bottom:8px">Connect once. Autofill everywhere.</h1>
+      <p style="color:var(--muted);margin-bottom:8px">Link sources so EarlyBirds can fill registration forms for you.</p>
+      <div class="connect-grid">
+        <div class="connect-card connected" onclick="this.classList.toggle('connected')"><h3>GitHub</h3><p>Repos, skills, and profile URL</p></div>
+        <div class="connect-card" onclick="this.classList.toggle('connected')"><h3>Resume</h3><p>Upload PDF for structured extraction</p></div>
+        <div class="connect-card" onclick="this.classList.toggle('connected')"><h3>Google</h3><p>Calendar and form autofill</p></div>
+      </div>
+      <div class="actions-row"><button class="btn btn-primary" onclick="goTo('profile-basics')">Continue</button><button class="btn btn-ghost" onclick="goTo('profile-basics')">Skip for now</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Profile Basics -->
+<div id="screen-profile-basics" class="screen">
+  <div class="full-page">
+    <div style="max-width:520px;width:100%">
+      <h1 style="font-size:24px;font-weight:500;margin-bottom:8px">Fill once — EarlyBirds reuses these on every form.</h1>
+      <div class="meter"><span style="font-size:13px;color:var(--muted)">Profile completeness</span><div style="display:flex;justify-content:space-between;margin-top:4px"><span class="mono" style="font-size:13px">4 of 6 fields</span></div><div class="meter-bar"><div class="meter-fill" style="width:67%"></div></div></div>
+      <div class="field"><label>Full name</label><input type="text" value="Alex Chen"></div>
+      <div class="field"><label>Email</label><input type="email" value="alex@school.edu"></div>
+      <div class="field"><label>School</label><input type="text" value="NUS"></div>
+      <div class="field"><label>Skills</label><div class="tags" id="skills-tags"><span class="tag selected">TypeScript</span><span class="tag selected">React</span><span class="tag selected">Node.js</span><span class="tag" onclick="toggleTag(this)">Python</span><span class="tag" onclick="toggleTag(this)">Rust</span></div></div>
+      <div class="field"><label>GitHub URL</label><input type="text" value="github.com/alexchen" class="mono" style="font-family:var(--mono)"></div>
+      <div class="actions-row"><button class="btn btn-primary" onclick="goTo('voice')">Continue</button><button class="btn btn-ghost" onclick="skipToFeed()">Skip for now</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Voice Onboarding -->
+<div id="screen-voice" class="screen">
+  <div class="full-page" style="align-items:flex-start;padding-top:60px">
+    <div class="voice-stack">
+      <div id="voice-card-0" class="voice-card">
+        <h2>What do you want to hack on next?</h2>
+        <div class="tags" id="interest-tags">
+          <span class="tag" onclick="toggleTag(this)">AI</span><span class="tag" onclick="toggleTag(this)">Climate</span>
+          <span class="tag selected" onclick="toggleTag(this)">Fintech</span><span class="tag" onclick="toggleTag(this)">DevTools</span>
+          <span class="tag" onclick="toggleTag(this)">Health</span><span class="tag" onclick="toggleTag(this)">Web3</span>
+          <span class="tag" onclick="toggleTag(this)">Something new to me</span>
+        </div>
+        <div class="voice-actions"><button class="btn btn-primary" onclick="nextVoiceCard(1)">Next</button><button class="btn btn-ghost" onclick="skipToFeed()">Skip voice step</button></div>
+      </div>
+      <div id="voice-card-1" class="voice-card hidden">
+        <h2>One line about you</h2>
+        <div class="field"><input type="text" value="Full-stack builder who ships fast and cares about UX."></div>
+        <div class="voice-actions"><button class="btn btn-ghost" onclick="nextVoiceCard(0)">Back</button><button class="btn btn-primary" onclick="nextVoiceCard(2)">Next</button></div>
+      </div>
+      <div id="voice-card-2" class="voice-card hidden">
+        <h2>Something you've built that represents how you work</h2>
+        <div class="field"><textarea rows="4">I built a real-time multiplayer game with custom netcode — 200 concurrent players, sub-50ms latency. I obsess over performance and player experience.</textarea></div>
+        <div class="voice-actions"><button class="btn btn-ghost" onclick="nextVoiceCard(1)">Back</button><button class="btn btn-primary" onclick="nextVoiceCard(3)">Next</button></div>
+      </div>
+      <div id="voice-card-3" class="voice-card hidden">
+        <h2>What would you try outside your usual lane?</h2>
+        <p style="color:var(--muted);font-size:13px;margin-bottom:12px">Optional — helps us surface stretch matches honestly.</p>
+        <div class="field"><input type="text" value="Payments infrastructure and fraud detection"></div>
+        <div class="voice-actions"><button class="btn btn-ghost" onclick="nextVoiceCard(2)">Back</button><button class="btn btn-primary" onclick="finishVoice()">Save & find hackathons</button><button class="btn btn-ghost" onclick="skipToFeed()">Skip</button></div>
+      </div>
+      <div class="progress-dots" id="voice-dots"><span class="dot active"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+      <div class="collapse-section">
+        <div class="collapse-header" onclick="document.getElementById('paste-area').classList.toggle('hidden')">Already have a bio or project write-up? <span style="margin-left:auto">+</span></div>
+        <div id="paste-area" class="collapse-body hidden"><textarea rows="3" placeholder="Paste existing bio or project description..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:var(--r-btn);font-family:var(--font)"></textarea></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- App Shell -->
+<div id="app-shell" class="app hidden">
+  <aside class="sidebar">
+    <div class="logo"><svg viewBox="0 0 28 28"><path class="bird" d="M4 18 L14 6 L14 11 L24 18"/></svg> EarlyBirds</div>
+    <div class="nav-item active" data-nav="discover" onclick="navTo('discover')">Discover</div>
+    <div class="nav-item" data-nav="saved" onclick="navTo('saved')">Saved</div>
+    <div class="nav-item" data-nav="registrations" onclick="navTo('registrations')">Registrations</div>
+    <div class="nav-item" data-nav="notifications" onclick="navTo('notifications')">Notifications <span class="badge">3</span></div>
+    <div class="nav-item" data-nav="profile" onclick="navTo('profile')">Profile</div>
+    <div class="nav-item" data-nav="settings" onclick="navTo('settings')">Settings</div>
+    <div class="sidebar-spacer"></div>
+    <div class="user-chip"><div class="avatar">AC</div><div><div style="font-weight:500;font-size:13px">Alex Chen</div><div style="font-size:12px;color:var(--muted)">alex@school.edu</div></div></div>
+  </aside>
+  <main class="main">
+
+    <!-- Discover -->
+    <div id="screen-discover" class="screen active">
+      <div class="content content-wide">
+        <div id="degraded-hint" class="degraded-hint hidden">Voice step skipped — generative drafts and stretch ranking may be less accurate. <span class="link" onclick="goTo('voice')">Complete your voice</span></div>
+        <div class="page-header"><h1>Discover</h1><div class="toggle-row">Auto-register <div class="toggle on" id="auto-reg-toggle" onclick="this.classList.toggle('on')"></div></div></div>
+        <div class="search-bar"><input type="text" placeholder="Search hackathons..." value="fintech asia 2026"><button class="btn btn-outline btn-sm">Search</button></div>
+        <div class="filter-chips">
+          <span class="filter-chip active">All</span><span class="filter-chip">AI</span><span class="filter-chip">Fintech</span>
+          <span class="filter-chip">Online</span><span class="filter-chip">This week</span>
+        </div>
+        <div class="event-list" id="event-list"></div>
+      </div>
+    </div>
+
+    <!-- Saved -->
+    <div id="screen-saved" class="screen">
+      <div class="content content-wide">
+        <div class="page-header"><h1>Saved</h1></div>
+        <div class="event-list" id="saved-list"></div>
+      </div>
+    </div>
+
+    <!-- Event Detail -->
+    <div id="screen-event-detail" class="screen">
+      <div class="content">
+        <span class="back-link" onclick="navTo('discover')">← Back to Discover</span>
+        <div id="event-detail-content"></div>
+      </div>
+    </div>
+
+    <!-- Registrations -->
+    <div id="screen-registrations" class="screen">
+      <div class="content">
+        <div class="page-header"><h1>Registrations</h1></div>
+        <div class="tabs"><span class="tab active" onclick="filterRegs('all',this)">All</span><span class="tab" onclick="filterRegs('active',this)">Active</span><span class="tab" onclick="filterRegs('needs',this)">Needs you</span><span class="tab" onclick="filterRegs('done',this)">Registered</span></div>
+        <div class="card" id="reg-list"></div>
+      </div>
+    </div>
+
+    <!-- Notifications -->
+    <div id="screen-notifications" class="screen">
+      <div class="content">
+        <div class="page-header"><h1>Notifications</h1></div>
+        <div class="card" id="notif-list"></div>
+      </div>
+    </div>
+
+    <!-- Profile -->
+    <div id="screen-profile" class="screen">
+      <div class="content">
+        <div class="page-header"><h1>Profile</h1></div>
+        <div class="section"><h2>Basics</h2>
+          <div class="section-grid">
+            <span class="label">Name</span><span class="editable">Alex Chen</span>
+            <span class="label">Email</span><span class="editable mono">alex@school.edu</span>
+            <span class="label">School</span><span class="editable">NUS</span>
+            <span class="label">Skills</span><span><span class="tag selected" style="cursor:default">TypeScript</span> <span class="tag selected" style="cursor:default">React</span> <span class="tag selected" style="cursor:default">Node.js</span></span>
+            <span class="label">GitHub</span><span class="editable mono">github.com/alexchen</span>
+          </div>
+        </div>
+        <div class="section"><h2>Your voice</h2>
+          <div class="section-grid">
+            <span class="label">Interests</span><span><span class="tag selected" style="cursor:default">Fintech</span></span>
+            <span class="label">One-liner</span><span class="editable">Full-stack builder who ships fast and cares about UX.</span>
+            <span class="label">Proud project</span><span class="editable">Real-time multiplayer game with custom netcode — 200 concurrent players...</span>
+            <span class="label">Outside lane</span><span class="editable">Payments infrastructure and fraud detection</span>
+          </div>
+        </div>
+        <div class="section"><h2>Writing samples</h2>
+          <div class="sample-item">"I built a real-time multiplayer game with custom netcode — 200 concurrent players, sub-50ms latency..." <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">voice</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div id="screen-settings" class="screen">
+      <div class="content">
+        <div class="page-header"><h1>Settings</h1></div>
+        <div class="card" style="margin-bottom:16px">
+          <h3 style="font-size:15px;font-weight:500;margin-bottom:4px">Autofill</h3>
+          <div class="setting-row"><div class="setting-info"><h4>Auto-register saved events</h4><p>Start registration when deadline is within 48h</p></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+          <div class="setting-row"><div class="setting-info"><h4>Human approval required</h4><p>Always pause before final submit</p></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+          <div class="setting-row"><div class="setting-info"><h4>Local browser runner</h4><p>Use Simulang via earlybirds-desktop</p></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+          <h3 style="font-size:15px;font-weight:500;margin-bottom:12px">Connected accounts</h3>
+          <div class="connected-account"><span>GitHub</span><span class="status">connected</span><button class="btn btn-ghost btn-sm" style="margin-left:auto">Disconnect</button></div>
+          <div class="connected-account"><span>Google</span><span class="status" style="color:var(--muted)">not connected</span><button class="btn btn-outline btn-sm" style="margin-left:auto">Connect</button></div>
+        </div>
+        <div class="card">
+          <h3 style="font-size:15px;font-weight:500;margin-bottom:12px">Privacy</h3>
+          <div class="setting-row"><div class="setting-info"><h4>Store form screenshots</h4><p>Keep debug artifacts from registration runs</p></div><div class="toggle" onclick="this.classList.toggle('on')"></div></div>
+          <div class="setting-row"><div class="setting-info"><h4>Share anonymized usage</h4><p>Help improve ranking models</p></div><div class="toggle" onclick="this.classList.toggle('on')"></div></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Autofill Takeover -->
+<div id="autofill" class="autofill">
+  <div id="autofill-main">
+    <div class="autofill-header">
+      <div class="logo"><svg viewBox="0 0 28 28"><path class="bird" d="M4 18 L14 6 L14 11 L24 18"/></svg> EarlyBirds</div>
+      <span class="status-pill" id="af-status-pill">auto-registering</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeAutofill()">Cancel</button>
+    </div>
+    <div class="autofill-context"><h2 id="af-event-name">Fintech Forward Hackathon</h2><div class="deadline" id="af-deadline">Registration closes in 2d 14h 32m</div></div>
+    <div class="autofill-body" id="af-body">
+      <div class="form-column" id="af-form-col">
+        <div id="af-pause-banner" class="pause-banner hidden"></div>
+        <div id="af-needs-input" class="needs-input-box hidden"></div>
+        <div id="af-fields"></div>
+      </div>
+      <div class="agent-column"><div class="agent-log" id="af-agent-log"></div></div>
+    </div>
+    <div class="autofill-footer" id="af-footer">
+      <div class="footer-note" id="af-footer-note">Nothing is submitted until you confirm</div>
+      <div class="footer-actions">
+        <button class="btn btn-ghost" onclick="closeAutofill()">Cancel</button>
+        <button class="btn btn-primary locked" id="af-confirm-btn" disabled onclick="confirmSubmit()">Confirm & submit</button>
+        <button class="btn btn-outline hidden" id="af-resume-btn" onclick="resumeAutofill()">Resume</button>
+      </div>
+    </div>
+  </div>
+  <div id="autofill-success" class="success-view hidden">
+    <div class="amber-hero bird-animate"><svg viewBox="0 0 28 28" style="width:48px;height:48px"><path class="bird" d="M4 18 L14 6 L14 11 L24 18" style="stroke:var(--amber-text)"/></svg><h2>You're in. Worm secured.</h2><p style="color:var(--amber-text);margin-bottom:8px">Fintech Forward Hackathon</p><div class="confirm-code">CONF-FFH-2026-A7X3</div></div>
+    <div class="card details-card"><h3 style="font-weight:500;margin-bottom:12px">Confirmation details</h3><div class="section-grid"><span class="label">When</span><span>Mar 15–16, 2026</span><span class="label">Where</span><span>Singapore (hybrid)</span><span class="label">Email</span><span class="mono">Confirmation sent to alex@school.edu</span></div><div style="margin-top:16px;display:flex;gap:12px"><button class="btn btn-primary btn-sm">Add to calendar</button><button class="btn btn-outline btn-sm">View confirmation</button></div></div>
+    <div class="next-matches"><h3>Up next for you</h3><div class="mini-cards"><div class="mini-card"><h4>Climate Tech Sprint</h4><div class="deadline">Closes in 5d</div><button class="btn btn-outline btn-sm" onclick="openAutofill('filling')">Register</button></div><div class="mini-card"><h4>AI Builders Weekend</h4><div class="deadline">Closes in 9d</div><button class="btn btn-outline btn-sm" onclick="openAutofill('filling')">Register</button></div></div></div>
+    <div style="margin-top:24px"><button class="btn btn-ghost" onclick="closeAutofill();navTo('discover')">Back to feed</button></div>
+  </div>
+  <div id="autofill-failed" class="failed-view hidden">
+    <div class="error-box"><h3 style="font-weight:500;margin-bottom:8px">Registration failed</h3><p>The form submission was rejected by the provider.</p><div class="error-code">ERR_SUBMIT_REJECTED · stage: submitting</div></div>
+    <div style="display:flex;gap:12px"><button class="btn btn-outline" onclick="setAutofillState('awaiting_approval')">Retry</button><button class="btn btn-ghost" onclick="closeAutofill()">Open form manually</button></div>
+  </div>
+</div>
+
+<!-- Debug Panel -->
+<div class="debug-panel" id="debug-panel">
+  <h4>Screen</h4>
+  <div class="debug-btns" id="debug-screens"></div>
+  <div class="debug-nav"><h4>Autofill state</h4><div class="debug-btns" id="debug-states"></div></div>
+</div>
+
+<script>
+const EVENTS = [
+  { id: 'ffh', title: 'Fintech Forward Hackathon', location: 'Singapore · Hybrid', deadline: '2d 14h', themes: ['fintech','ai'], viaExa: true, merged: 3, stretch: true, stretchReason: 'Outside your usual lane — fintech, 2 days', saved: true, reasons: ['Matches Fintech interest','Strong fit for full-stack builders'], exaQuery: 'upcoming fintech hackathons open registration Singapore 2026', citations: [{field:'dates',url:'luma.com/fintech-forward-2026'},{field:'eligibility',url:'devpost.com/ffh/rules'},{field:'prizes',url:'fintechforward.sg/prizes'}] },
+  { id: 'cts', title: 'Climate Tech Sprint', location: 'Online', deadline: '5d 8h', themes: ['climate'], viaExa: true, merged: 0, stretch: false, saved: false, reasons: ['Climate interest overlap','Online — no travel'], exaQuery: 'climate tech hackathon online registration 2026', citations: [{field:'dates',url:'devpost.com/climate-sprint'}] },
+  { id: 'abw', title: 'AI Builders Weekend', location: 'Bangkok · In person', deadline: '9d 3h', themes: ['ai','devtools'], viaExa: false, merged: 2, stretch: false, saved: true, reasons: ['AI + DevTools match','Weekend format'], exaQuery: '', citations: [] },
+  { id: 'hth', title: 'HealthTech Hack', location: 'Online', deadline: '12d', themes: ['health'], viaExa: true, merged: 0, stretch: false, saved: false, reasons: ['Health theme available'], exaQuery: 'healthtech hackathon 2026', citations: [] }
+];
+
+const AUTOFILL_FIELDS = [
+  { key: 'full_name', label: 'Full name', value: 'Alex Chen', source: 'profile', type: 'text' },
+  { key: 'email', label: 'Email', value: 'alex@school.edu', source: 'profile', type: 'text' },
+  { key: 'github', label: 'GitHub', value: 'github.com/alexchen', source: 'profile', type: 'text' },
+  { key: 'school', label: 'School', value: 'NUS', source: 'profile', type: 'text' },
+  { key: 'team_status', label: 'Team status', value: '', source: 'llm_inferred', type: 'text', inferredValue: 'Looking for teammates' },
+  { key: 'why_join', label: 'Why do you want to join?', value: '', source: 'llm_draft', type: 'draft',
+    draftText: "I'm excited to explore payments infrastructure and fraud detection — areas I haven't built in yet, but my experience shipping fast, user-facing products means I can contribute from day one." }
+];
+
+const REGISTRATIONS = [
+  { id: 'r1', event: 'Fintech Forward Hackathon', status: 'awaiting_approval', time: '2 min ago' },
+  { id: 'r2', event: 'AI Builders Weekend', status: 'needs_input', time: '1 hr ago' },
+  { id: 'r3', event: 'DevTools Dash', status: 'captcha_encountered', time: '3 hr ago' },
+  { id: 'r4', event: 'Web3 Wave', status: 'oauth_redirect', time: 'Yesterday' },
+  { id: 'r5', event: 'Climate Tech Sprint', status: 'succeeded', time: '2 days ago' },
+  { id: 'r6', event: 'HealthTech Hack', status: 'failed', time: '3 days ago' },
+  { id: 'r7', event: 'Startup Weekend SG', status: 'filling', time: 'Just now' }
+];
+
+const NOTIFICATIONS = [
+  { title: 'Registration ready for review', body: 'Fintech Forward Hackathon — confirm your submission', time: '2m', unread: true, action: () => openAutofill('awaiting_approval', true) },
+  { title: 'New match: Climate Tech Sprint', body: 'Score 0.82 — matches your climate interest', time: '1h', unread: true },
+  { title: 'Input needed', body: 'AI Builders Weekend form asks for team name', time: '3h', unread: true, action: () => openAutofill('needs_input', true) },
+  { title: 'Deadline reminder', body: 'Fintech Forward closes in 2 days', time: '1d', unread: false },
+  { title: 'Registration confirmed', body: 'Climate Tech Sprint — you\'re in!', time: '2d', unread: false }
+];
+
+let currentScreen = 'auth';
+let voiceCard = 0;
+let voiceSkipped = false;
+let autofillState = 'idle';
+let filledCount = 0;
+let autoTimers = [];
+let manualOverride = false;
+let fieldStates = {};
+
+const SCREENS = ['auth','connect','profile-basics','voice','discover','saved','event-detail','registrations','notifications','profile','settings'];
+const AF_STATES = ['filling','needs_input','captcha_encountered','oauth_redirect','awaiting_approval','submitting','succeeded','failed'];
+
+function init() {
+  renderEvents();
+  renderSaved();
+  renderRegistrations();
+  renderNotifications();
+  initDebug();
+  document.querySelectorAll('.filter-chip').forEach(c => c.onclick = function() {
+    document.querySelectorAll('.filter-chip').forEach(x => x.classList.remove('active'));
+    this.classList.add('active');
+  });
+}
+
+function goTo(screen) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById('screen-' + screen);
+  if (el) el.classList.add('active');
+  currentScreen = screen;
+  const shellScreens = ['discover','saved','event-detail','registrations','notifications','profile','settings'];
+  document.getElementById('app-shell').classList.toggle('hidden', !shellScreens.includes(screen));
+  if (shellScreens.includes(screen)) {
+    document.getElementById('app-shell').classList.remove('hidden');
+    document.querySelectorAll('#app-shell > .main > .screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('screen-' + screen).classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.nav === screen || (screen === 'event-detail' && n.dataset.nav === 'discover')));
+  }
+  updateDebug();
+}
+
+function navTo(screen) { goTo(screen); }
+
+function skipToFeed() {
+  voiceSkipped = true;
+  document.getElementById('app-shell').classList.remove('hidden');
+  goTo('discover');
+  document.getElementById('degraded-hint').classList.remove('hidden');
+}
+
+function finishVoice() {
+  voiceSkipped = false;
+  document.getElementById('app-shell').classList.remove('hidden');
+  goTo('discover');
+}
+
+function toggleTag(el) { el.classList.toggle('selected'); }
+
+function nextVoiceCard(n) {
+  document.getElementById('voice-card-' + voiceCard).classList.add('hidden');
+  voiceCard = n;
+  document.getElementById('voice-card-' + voiceCard).classList.remove('hidden');
+  document.querySelectorAll('#voice-dots .dot').forEach((d, i) => {
+    d.classList.toggle('active', i === voiceCard);
+    d.classList.toggle('done', i < voiceCard);
+  });
+}
+
+function renderEventCard(e, listId) {
+  return `<div class="event-card" onclick="showEventDetail('${e.id}')">
+    <div class="event-card-top"><div><h3>${e.title}</h3><div class="event-meta">${e.location} · <span class="mono">${e.deadline}</span></div>
+    <div class="event-badges">${e.viaExa ? '<span class="badge badge-exa">Via Exa</span>' : ''}${e.merged ? `<span class="badge badge-merged">Merged from ${e.merged} sources</span>` : ''}</div>
+    ${e.stretch ? `<div class="stretch-reason">${e.stretchReason}</div>` : ''}</div>
+    <button class="save-toggle ${e.saved ? 'saved' : ''}" onclick="event.stopPropagation();toggleSave('${e.id}')">${e.saved ? 'Saved' : 'Save'}</button></div>
+    <div class="event-card-actions"><button class="btn btn-primary btn-sm" onclick="event.stopPropagation();startRegister('${e.id}')">Register</button></div></div>`;
+}
+
+function renderEvents() {
+  document.getElementById('event-list').innerHTML = EVENTS.map(e => renderEventCard(e, 'event-list')).join('');
+}
+
+function renderSaved() {
+  const saved = EVENTS.filter(e => e.saved);
+  document.getElementById('saved-list').innerHTML = saved.length ? saved.map(e => renderEventCard(e)).join('') : '<div class="empty-state"><h3>No saved events</h3><p>Bookmark events from Discover to track them here.</p></div>';
+}
+
+function toggleSave(id) {
+  const e = EVENTS.find(x => x.id === id);
+  if (e) { e.saved = !e.saved; renderEvents(); renderSaved(); }
+}
+
+function showEventDetail(id) {
+  const e = EVENTS.find(x => x.id === id);
+  if (!e) return;
+  document.getElementById('event-detail-content').innerHTML = `
+    <div class="detail-hero"><h1>${e.title}</h1><div class="event-meta">${e.location}</div>
+    <div class="countdown">Registration closes in <span class="mono">${e.deadline}</span></div>
+    <div class="event-badges">${e.viaExa ? '<span class="badge badge-exa">Via Exa</span>' : ''}${e.merged ? `<span class="badge badge-merged">Merged from ${e.merged} sources</span>` : ''}</div></div>
+    <div class="match-pills">${e.reasons.map(r => `<span class="pill">${r}</span>`).join('')}${e.stretch ? `<span class="pill pill-stretch">${e.stretchReason}</span>` : ''}</div>
+    <div class="exa-drawer"><div class="exa-drawer-header">How we found this <span>−</span></div>
+    <div class="exa-drawer-body"><div style="font-size:13px;color:var(--muted);margin-bottom:8px">Exa query</div>
+    <div class="exa-query">${e.exaQuery || 'N/A'}</div>${e.citations.map(c => `<div class="citation"><span class="citation-label">${c.field}</span><span class="citation-url">${c.url}</span></div>`).join('')}</div></div>
+    <div style="display:flex;gap:12px"><button class="btn btn-primary" onclick="startRegister('${e.id}')">Register</button>
+    <button class="btn btn-outline" onclick="toggleSave('${e.id}')">${e.saved ? 'Unsave' : 'Save'}</button></div>`;
+  goTo('event-detail');
+}
+
+function startRegister(id) { openAutofill('filling'); }
+
+const STATUS_LABELS = {
+  awaiting_approval: ['Awaiting approval', 'status-awaiting'],
+  needs_input: ['Needs your input', 'status-needs'],
+  captcha_encountered: ['Paused — action needed', 'status-paused'],
+  oauth_redirect: ['Paused — action needed', 'status-paused'],
+  succeeded: ['Registered', 'status-success'],
+  failed: ['Failed', 'status-failed'],
+  filling: ['Filling', 'status-filling'],
+  submitting: ['Submitting', 'status-filling']
+};
+
+function renderRegistrations(filter) {
+  let regs = REGISTRATIONS;
+  if (filter === 'active') regs = regs.filter(r => ['filling','submitting'].includes(r.status));
+  if (filter === 'needs') regs = regs.filter(r => ['awaiting_approval','needs_input','captcha_encountered','oauth_redirect'].includes(r.status));
+  if (filter === 'done') regs = regs.filter(r => r.status === 'succeeded');
+  document.getElementById('reg-list').innerHTML = regs.map(r => {
+    const [label, cls] = STATUS_LABELS[r.status] || [r.status, 'status-filling'];
+    return `<div class="reg-row"><div class="reg-info"><h4>${r.event}</h4><p>${r.time}</p></div>
+    <div style="display:flex;align-items:center;gap:12px"><span class="status-pill-row ${cls}">${label}</span>
+    <button class="btn btn-outline btn-sm" onclick="openAutofill('${r.status}')">Open</button></div></div>`;
+  }).join('');
+}
+
+function filterRegs(f, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderRegistrations(f);
+}
+
+function renderNotifications() {
+  document.getElementById('notif-list').innerHTML = NOTIFICATIONS.map((n, i) => `
+    <div class="notif-item" onclick="handleNotif(${i})">
+    <div class="notif-dot ${n.unread ? '' : 'read'}"></div>
+    <div class="notif-body"><h4>${n.title}</h4><p>${n.body}</p></div>
+    <span class="notif-time">${n.time}</span></div>`).join('');
+}
+
+function handleNotif(i) { if (NOTIFICATIONS[i].action) NOTIFICATIONS[i].action(); }
+
+function clearAutoTimers() { autoTimers.forEach(t => clearTimeout(t)); autoTimers = []; }
+
+function openAutofill(state, fromDebug) {
+  manualOverride = !!fromDebug;
+  autofillState = state;
+  document.getElementById('autofill').classList.add('active');
+  document.getElementById('autofill-main').classList.remove('hidden');
+  document.getElementById('autofill-success').classList.add('hidden');
+  document.getElementById('autofill-failed').classList.add('hidden');
+  filledCount = 0;
+  fieldStates = {};
+  AUTOFILL_FIELDS.forEach(f => fieldStates[f.key] = { filled: false, value: '' });
+  clearAutoTimers();
+  document.getElementById('af-confirm-btn').textContent = 'Confirm & submit';
+  initAgentLog();
+  applyAutofillState(state);
+  if (state === 'filling' && !fromDebug) startAutoAdvance();
+  updateDebug();
+}
+
+function closeAutofill() {
+  document.getElementById('autofill').classList.remove('active');
+  autofillState = 'idle';
+  clearAutoTimers();
+  updateDebug();
+}
+
+function startAutoAdvance() {
+  let t = 600;
+  AUTOFILL_FIELDS.filter(f => f.key !== 'team_status').forEach((f, i) => {
+    autoTimers.push(setTimeout(() => {
+      if (manualOverride || autofillState !== 'filling') return;
+      fillField(f.key);
+    }, t));
+    t += 900 + i * 100;
+  });
+  autoTimers.push(setTimeout(() => {
+    if (manualOverride || autofillState !== 'filling') return;
+    applyAutofillState('needs_input');
+    autoTimers.push(setTimeout(() => {
+      if (manualOverride || autofillState !== 'needs_input') return;
+      fieldStates.team_status.filled = true;
+      fieldStates.team_status.value = 'Looking for teammates';
+      addLog('filled · Team status (llm_inferred)', false);
+      applyAutofillState('awaiting_approval');
+    }, 4000));
+  }, t + 400));
+}
+
+function setAutofillState(state) { applyAutofillState(state); updateDebug(); }
+
+function applyAutofillState(state) {
+  autofillState = state;
+
+  document.getElementById('autofill-main').classList.toggle('hidden', ['succeeded','failed'].includes(state));
+  document.getElementById('autofill-success').classList.toggle('hidden', state !== 'succeeded');
+  document.getElementById('autofill-failed').classList.toggle('hidden', state !== 'failed');
+
+  const pill = document.getElementById('af-status-pill');
+  const pauseBanner = document.getElementById('af-pause-banner');
+  const needsInput = document.getElementById('af-needs-input');
+  const confirmBtn = document.getElementById('af-confirm-btn');
+  const resumeBtn = document.getElementById('af-resume-btn');
+  const footerNote = document.getElementById('af-footer-note');
+  const afBody = document.getElementById('af-body');
+  const afFooter = document.getElementById('af-footer');
+
+  pauseBanner.classList.add('hidden');
+  needsInput.classList.add('hidden');
+  resumeBtn.classList.add('hidden');
+  afBody.classList.remove('hidden');
+  afFooter.classList.remove('hidden');
+
+  if (state === 'filling') {
+    pill.textContent = 'auto-registering';
+    pill.className = 'status-pill';
+    confirmBtn.disabled = true;
+    confirmBtn.classList.add('locked');
+    footerNote.className = 'footer-note';
+    footerNote.innerHTML = 'Nothing is submitted until you confirm';
+    if (filledCount === 0 && !document.getElementById('af-agent-log').children.length) initAgentLog();
+    renderAutofillFields();
+  } else if (state === 'needs_input') {
+    prefillProfileFields();
+    pill.textContent = 'needs input';
+    pill.className = 'status-pill paused';
+    needsInput.classList.remove('hidden');
+    needsInput.innerHTML = `<p style="margin-bottom:12px">This form asks for <strong>Team status</strong> — we don't have it yet.</p>
+    <div class="field"><input type="text" id="team-status-input" placeholder="e.g. Looking for teammates" value="Looking for teammates"></div>
+    <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="provideTeamStatus()">Provide & resume</button>`;
+    addLog('paused · needs_input: team_status', true);
+    confirmBtn.disabled = true;
+    confirmBtn.classList.add('locked');
+    renderAutofillFields();
+  } else if (state === 'captcha_encountered') {
+    prefillAllFields();
+    pill.textContent = 'paused';
+    pill.className = 'status-pill paused';
+    pauseBanner.classList.remove('hidden');
+    pauseBanner.textContent = 'Complete the CAPTCHA in your browser, then click Resume.';
+    resumeBtn.classList.remove('hidden');
+    confirmBtn.disabled = true;
+    addLog('paused · captcha_encountered', true);
+    renderAutofillFields(true);
+  } else if (state === 'oauth_redirect') {
+    prefillAllFields();
+    pill.textContent = 'paused';
+    pill.className = 'status-pill paused';
+    pauseBanner.classList.remove('hidden');
+    pauseBanner.textContent = 'Sign in to Google in your browser, then click Resume.';
+    resumeBtn.classList.remove('hidden');
+    confirmBtn.disabled = true;
+    addLog('paused · oauth_redirect: Google', true);
+    renderAutofillFields(true);
+  } else if (state === 'awaiting_approval') {
+    pill.textContent = 'ready for review';
+    pill.className = 'status-pill';
+    AUTOFILL_FIELDS.forEach(f => {
+      fieldStates[f.key].filled = true;
+      fieldStates[f.key].value = f.inferredValue || f.draftText || f.value;
+    });
+    confirmBtn.disabled = false;
+    confirmBtn.classList.remove('locked');
+    footerNote.className = 'footer-note ready';
+    footerNote.innerHTML = 'Ready — review, then confirm';
+    addLog('awaiting_approval · all fields filled', true);
+    renderAutofillFields(true);
+  } else if (state === 'submitting') {
+    pill.textContent = 'submitting';
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Submitting...';
+    addLog('submitting form...', true);
+    autoTimers.push(setTimeout(() => setAutofillState('succeeded'), 2000));
+    renderAutofillFields(true);
+  } else if (state === 'succeeded' || state === 'failed') {
+    afBody.classList.add('hidden');
+    afFooter.classList.add('hidden');
+  }
+  updateDebug();
+}
+
+function fillField(key) {
+  const f = AUTOFILL_FIELDS.find(x => x.key === key);
+  if (!f) return;
+  fieldStates[key].filled = true;
+  fieldStates[key].value = f.draftText || f.value;
+  addLog(`filling · ${f.label}`, true);
+  setTimeout(() => addLog(`filled · ${f.label}`, false), 200);
+  renderAutofillFields();
+}
+
+function prefillProfileFields() {
+  AUTOFILL_FIELDS.filter(f => f.key !== 'team_status').forEach(f => {
+    fieldStates[f.key].filled = true;
+    fieldStates[f.key].value = f.draftText || f.value;
+  });
+}
+
+function prefillAllFields() {
+  AUTOFILL_FIELDS.forEach(f => {
+    fieldStates[f.key].filled = true;
+    fieldStates[f.key].value = f.inferredValue || f.draftText || f.value;
+  });
+}
+
+function provideTeamStatus() {
+  manualOverride = true;
+  clearAutoTimers();
+  const val = document.getElementById('team-status-input').value;
+  fieldStates.team_status.filled = true;
+  fieldStates.team_status.value = val;
+  addLog(`filled · Team status (user provided)`, false);
+  setAutofillState('awaiting_approval');
+}
+
+function resumeAutofill() {
+  if (autofillState === 'captcha_encountered' || autofillState === 'oauth_redirect') {
+    setAutofillState('awaiting_approval');
+  }
+}
+
+function confirmSubmit() {
+  document.getElementById('af-confirm-btn').textContent = 'Confirm & submit';
+  setAutofillState('submitting');
+}
+
+function initAgentLog() {
+  document.getElementById('af-agent-log').innerHTML = `
+    <div class="step done">reading form structure...</div>
+    <div class="step done">found 6 fields</div>
+    <div class="step done">matching to your profile...</div>`;
+}
+
+function addLog(msg, active) {
+  const log = document.getElementById('af-agent-log');
+  log.querySelectorAll('.step.active').forEach(s => { s.classList.remove('active'); s.classList.add('done'); });
+  const div = document.createElement('div');
+  div.className = 'step' + (active ? ' active' : ' done');
+  div.textContent = msg;
+  log.appendChild(div);
+}
+
+function sourceChip(source) {
+  if (source === 'profile') return '<span class="source-chip">profile</span>';
+  if (source === 'default') return '<span class="source-chip default">default</span>';
+  if (source === 'llm_inferred') return '<span class="source-chip inferred">Inferred — review</span>';
+  if (source === 'llm_draft') return '<span class="source-chip draft">Draft — tailored to this event</span>';
+  return '';
+}
+
+function renderAutofillFields(allDone) {
+  const container = document.getElementById('af-fields');
+  const showAll = allDone || autofillState === 'awaiting_approval' || autofillState === 'needs_input';
+  container.innerHTML = AUTOFILL_FIELDS.map(f => {
+    const st = fieldStates[f.key];
+    const done = showAll ? st.filled || allDone : st.filled;
+    const val = st.value || (done ? (f.inferredValue || f.draftText || f.value) : '');
+    const isDraft = f.source === 'llm_draft' && autofillState === 'awaiting_approval';
+    const isNeedsInput = f.key === 'team_status' && autofillState === 'needs_input';
+    if (isNeedsInput) return '';
+    let valueHtml;
+    if (isDraft) {
+      valueHtml = `<textarea class="draft-textarea" id="draft-textarea">${f.draftText}</textarea>
+        <div class="draft-actions"><button class="link">Regenerate</button><span style="color:var(--border)">·</span><button class="link">Shorter</button></div>`;
+    } else {
+      valueHtml = `<div class="value ${done ? '' : 'empty'}">${done ? val : '...'}</div>`;
+    }
+    const showChip = done && f.source;
+    const chip = showChip ? sourceChip(f.key === 'team_status' && autofillState === 'awaiting_approval' ? 'llm_inferred' : f.source) : '';
+    return `<div class="form-field ${done ? 'done' : ''}"><label>${f.label}</label>${valueHtml}${chip}<span class="check">✓</span></div>`;
+  }).join('');
+}
+
+function initDebug() {
+  const screensEl = document.getElementById('debug-screens');
+  screensEl.innerHTML = SCREENS.map(s => `<button class="debug-btn" data-screen="${s}" onclick="debugGoScreen('${s}')">${s}</button>`).join('');
+  const statesEl = document.getElementById('debug-states');
+  statesEl.innerHTML = AF_STATES.map(s => `<button class="debug-btn" data-af="${s}" onclick="debugGoAutofill('${s}')">${s}</button>`).join('');
+}
+
+function debugGoScreen(s) {
+  if (['discover','saved','registrations','notifications','profile','settings'].includes(s)) {
+    document.getElementById('app-shell').classList.remove('hidden');
+    goTo(s);
+  } else {
+    document.getElementById('app-shell').classList.add('hidden');
+    document.querySelectorAll('.screen').forEach(x => x.classList.remove('active'));
+    document.getElementById('screen-' + s).classList.add('active');
+    currentScreen = s;
+  }
+  updateDebug();
+}
+
+function debugGoAutofill(s) {
+  clearAutoTimers();
+  openAutofill(s, true);
+}
+
+function updateDebug() {
+  document.querySelectorAll('#debug-screens .debug-btn').forEach(b => b.classList.toggle('active', b.dataset.screen === currentScreen));
+  document.querySelectorAll('#debug-states .debug-btn').forEach(b => b.classList.toggle('active', b.dataset.af === autofillState));
+}
+
+init();
+</script>
+</body>
+</html>

@@ -84,7 +84,7 @@ ranks results, texts you the good ones, and — on your approval — Simulang re
                                     │  - Feed / ranked events                   │
                                     │  - Event detail + Exa citations (§6.3.0)  │
                                     │  - Registration flow (autofill + confirm, §6.3.1) │
-                                    │  - Profile setup (§6.3.3)                 │
+                                    │  - Profile basics (§6.3.3) + voice (§6.3.4) │
                                     └────────────┬─────────────────┬─────────────┘
                                                  │ REST / SSE      │ SSE (local runs)
                                     ┌────────────▼─────────────────▼─────────────┐
@@ -204,6 +204,10 @@ interface UserProfile {
   travelRegions?: string[];        // ["SEA", "Greater China"]
   // Answers we can reuse to auto-fill forms.
   formAnswers: Record<string, string>;  // keyed by canonical field name
+  // Voice onboarding (§6.3.4) — for drafts + ranking; past work ≠ future topic.
+  promptAnswers: Record<string, string>;  // Hinge prompt ids → answers
+  writingSamples: { text: string; purpose: "voice" }[];
+  exploreOutsideLane?: string;          // optional branching prompt (§6.3.4)
 }
 
 interface RankedEvent {
@@ -224,6 +228,7 @@ interface FormFieldSpec {
   required: boolean;
   options?: string[];              // for select/radio
   confidence: number;              // how sure we are this mapping is correct
+  fillTier?: "profile" | "structured" | "generative";  // fill strategy (§6.3.5)
 }
 
 // A single attempt to register a user for an event.
@@ -245,7 +250,8 @@ interface RegistrationRun {
 interface PlannedAction {
   field: string;                   // canonicalName
   value: string;                   // what we'll type (redacted for secrets in UI)
-  source: "profile" | "default" | "llm_inferred";
+  source: "profile" | "default" | "llm_inferred" | "llm_draft";
+  // llm_draft = generative essay/long-text; event-themed, voice from writingSamples (§6.3.5)
 }
 
 // SSE events streamed to the autofill reveal screen (§6.3.1).
@@ -373,9 +379,12 @@ fixtures — ideal to hand to an agent with a golden-file test suite.
 
 Produces `RankedEvent[]` per user.
 
-- **Phase 1 (deterministic):** theme overlap, location/travel fit, deadline proximity, eligibility filter.
-- **Phase 2 (LLM reasons):** generate short human-facing `reasons[]` ("Matches your interest in AI;
-  3-day online event you can join from Singapore").
+- **Phase 1 (deterministic):** theme overlap with `interests[]` + `promptAnswers` (what they want
+  *next*, not only past projects), location/travel fit, deadline proximity, eligibility filter.
+  Optional **exploration boost** for events outside the user's usual lane when `exploreOutsideLane`
+  is set (§6.3.4) — surface stretch matches, don't filter-bubble.
+- **Phase 2 (LLM reasons):** short human-facing `reasons[]`. Allow stretch framing ("Outside your
+  usual lane — fintech, 2 days") — never pigeonhole ("Perfect for game developers like you").
 - **Optional:** embed `interests` + event description into a vector index for semantic match.
 
 Output is cached per (user, event) and invalidated on profile edit or event update.
@@ -394,8 +403,11 @@ queued → introspecting → filling ⇄ needs_input / captcha_encountered / oau
 ```
 
 - **introspecting** — confirm/refresh `FormFieldSpec[]` against the live page.
-- **filling** — map `UserProfile.formAnswers` + `PlannedAction[]`. Unmapped required fields are
-  flagged. LLM may infer values but they're tagged `llm_inferred` and surfaced for review.
+- **filling** — classify each field into a **fill tier** (§6.3.5): profile fields copy exact;
+  structured fields reuse `formAnswers` / prompts; generative fields get an **event-themed draft**
+  (voice from `writingSamples`, topic from *this* hackathon — not past project domain). Map to
+  `PlannedAction[]`. Unmapped required fields flagged. All generative + inferred values surfaced
+  at review — never silently submitted.
 - **needs_input** — pause: a required field has no profile mapping. UI prompts the user inline;
   resume → `filling`.
 - **captcha_encountered** — pause: runner hit a CAPTCHA. UI tells user to complete it in the
@@ -616,6 +628,10 @@ Visual spec is frozen here so frontend agents don't improvise typography or colo
 Aligns with §2 principle *Registration is human-gated by default* — personality and architecture
 both treat trust as load-bearing.
 
+**Explicit non-goals:** no registration **chatbot** or conversational sidebar — users edit drafts
+inline on the confirm gate (§6.3.1). Optional **Regenerate / Shorter** micro-actions on draft fields
+only; no open-ended chat thread.
+
 ### 6.2 Design tokens
 
 #### Type
@@ -688,9 +704,13 @@ spinner in the header status pill.
 3. **Two columns**
    - **Left — registration form (form mirror):** in-app mirror fed by SSE + `plannedActions` — not a
      raw browser screenshot. Fields populate live as the agent fills; value text types in (mono);
-     each completed field gets a teal (`#1D9E75`) check. **Simulang runs locally** (`earlybirds-desktop`)
-     driving the user's Chrome beside the UI; form mirror reflects what the agent typed.
-     `RegistrationRun.artifacts` screenshots are debug/fallback only.
+     each completed field gets a teal (`#1D9E75`) check. **Profile** and **structured** fields show
+     a mono source chip (`profile` / `default`). **Generative** (essay) fields show a **Draft —
+     tailored to this event** chip (amber text only, §6.2) and render as an editable textarea at
+     `awaiting_approval` — never a chat thread. Optional micro-actions on draft fields only:
+     **Regenerate** · **Shorter** (re-runs draft LLM with same anti-bias rules, §6.3.5).
+     **Simulang runs locally** (`earlybirds-desktop`) driving the user's Chrome beside the UI; form
+     mirror reflects what the agent typed. `RegistrationRun.artifacts` screenshots are debug/fallback only.
    - **Right — agent activity feed:** mono step log driven by `RegistrationProgressEvent` (§4),
      Perplexity-style — e.g. "reading form structure → found N fields → matching to your profile →
      filling · {field}"
@@ -703,7 +723,7 @@ spinner in the header status pill.
 | Phase | Status | UI |
 |---|---|---|
 | Agent working | `introspecting` → `filling` (incl. pause states) | Feed steps through; form fields populate; Confirm locked |
-| Human review | `awaiting_approval` | All fields filled + checked; Confirm unlocked; user reviews diff |
+| Human review | `awaiting_approval` | All fields filled + checked; generative fields editable; Confirm unlocked; user reviews diff |
 | Submit | `submitting` → `succeeded` | Confirm shows spinner → navigate to §6.3.2 |
 
 Human-in-the-loop is **mandatory** — the agent never auto-submits (§2, §5.4).
@@ -725,18 +745,72 @@ They never overlap on this screen.
 Maps to `RegistrationRun.status === "succeeded"`. Confirmation code: runner-captured reference
 from the provider when available, else a short hash of `runId` for display.
 
-#### 6.3.3 Profile setup ("fill once, never again")
+#### 6.3.3 Profile basics (Step A — "fill once, never again")
 
 First-run or incomplete profile. Most-used screen in the real product; demo can pre-seed and skip.
+Step A of onboarding — factual fields only; voice prompts are Step B (§6.3.4).
 
 **Layout:**
 - Headline (Hanken): "Fill once — EarlyBirds reuses these on every form."
 - Completeness meter (e.g. "4 of 6 fields")
 - Canonical field list mapped to `UserProfile.formAnswers`: name, email, school, skills, GitHub, etc.
 - Values the user enters display in Hanken; saved keys shown in mono in a subtle sidebar if helpful
-- Primary CTA: **Save profile** (teal). Secondary: skip for now (returns to feed)
+- Primary CTA: **Continue** (teal) → §6.3.4. Secondary: skip for now (returns to feed; generative
+  drafts and stretch ranking degraded until voice step complete)
 
 Incomplete profile gates Register with inline prompt linking here.
+
+#### 6.3.4 Your voice (Step B — Hinge-style prompts)
+
+Card-stack onboarding for **how they write** and **what they want next** — not a domain lock-in.
+Optional collapsed paste at bottom for users who already have essay drafts.
+
+**Core prompts (3 cards, swipe or tap through):**
+
+| Prompt id | Question (Hanken) | Input | Stored as |
+|---|---|---|---|
+| `interests_next` | What do you want to hack on next? | Chip multi-select + "Something new to me" | `interests[]` + `promptAnswers.interests_next` |
+| `one_liner` | One line about you | Short text | `formAnswers.bio` + `promptAnswers.one_liner` |
+| `proud_project` | Something you've built that represents how you work | Voice or text (≥1 sentence) | `writingSamples[]` (`purpose: "voice"`) + `promptAnswers.proud_project` |
+
+**Optional 4th card:**
+
+| `explore_outside_lane` | What would you try outside your usual lane? | Short text | `exploreOutsideLane` + `promptAnswers.explore_outside_lane` |
+
+Feeds ranking exploration boost (§5.3) — surfaces stretch matches with honest reason copy.
+
+**Optional paste (collapsed):** "Already have a bio or project write-up?" → textarea appends to
+`writingSamples` — boosts draft quality, **not required** for registration.
+
+**UX:** Perplexity/Hinge calm — one question per card, progress dots, no mascot. Primary CTA on
+last card: **Save & find hackathons** (teal). Skip voice step allowed (same degradation as §6.3.3).
+
+#### 6.3.5 Field fill tiers & draft generation policy
+
+Every mapped form field gets a **fill tier** (`FormFieldSpec.fillTier` → drives `PlannedAction.source`).
+
+| Tier | Examples | Behavior | `PlannedAction.source` |
+|---|---|---|---|
+| **Profile** | name, email, GitHub | Exact copy from `formAnswers` | `profile` |
+| **Structured** | school, skills, t-shirt size | Reuse `formAnswers` / prompt answers; sensible `default` if missing | `profile` or `default` |
+| **Generative** | "Why this hackathon?", project idea essays | Event-themed **draft** at fill time; user edits at review | `llm_draft` |
+
+**Anti-bias / branching rules (non-negotiable for drafts and ranking):**
+
+1. **Voice ≠ topic.** `writingSamples` and `proud_project` inform *tone, credibility, and sentence
+   rhythm* — not the hackathon's theme. A user who built games must still get a fintech- or
+   climate-themed draft when *this event* is fintech/climate.
+2. **Forward-looking interests.** `interests_next` and event metadata drive draft *subject*; past
+   projects must not pigeonhole ("Perfect for game devs").
+3. **Ranking honesty.** Stretch matches get explicit reason copy ("Outside your usual lane — …");
+   never hide exploration behind false precision.
+4. **Draft LLM system rule (Codex):** *"Past work informs voice and credibility; the current
+   hackathon informs topic. Never infer project type from history alone."*
+5. **Human gate.** All `llm_draft` values appear in the form mirror at `awaiting_approval` as
+   editable text — user confirms or edits before submit. No registration chatbot (§6.1).
+
+**Inference vs draft:** Short factual gaps (e.g. t-shirt size unset) may use `llm_inferred` with
+review flag; long prose always uses `llm_draft` + **Draft — tailored to this event** chip.
 
 ### 6.4 UI state matrix
 
@@ -751,7 +825,7 @@ Frontend states the UI must handle. Copy follows §6.2 type/color rules.
 | `needs_input` | "This form asks for **{field}** — we don't have it yet." Inline input in form column. | Provide value → Resume |
 | `captcha_encountered` | "Complete the CAPTCHA in your browser, then click Resume." | Resume |
 | `oauth_redirect` | "Sign in to **{provider}** in your browser, then click Resume." | Resume |
-| `awaiting_approval` | §6.3.1 footer: shield-check "Ready — review, then confirm"; Confirm unlocked; `llm_inferred` flagged (amber **text** chip only — not sunrise hero amber) | Confirm & submit · Cancel |
+| `awaiting_approval` | §6.3.1 footer: shield-check "Ready — review, then confirm"; Confirm unlocked; `llm_inferred` flagged (amber **text** chip); `llm_draft` fields show **Draft — tailored to this event** chip + editable textarea + Regenerate · Shorter | Confirm & submit · Cancel |
 | `submitting` | Confirm button spinner (teal) | — |
 | `succeeded` | §6.3.2 amber hero + details card + next matches | Add to calendar · Back to feed |
 | `failed` | Last artifact screenshot + error stage (Hanken message, mono error code if any) | Open form manually · Retry |
@@ -830,13 +904,14 @@ Each engineer owns a vertical slice end-to-end so no one is blocked waiting for 
 - `RegistrationRunner` interface + **`earlybirds-desktop`** local agent + `LocalSimulangBridge`.
 - **SimulangRunner** — local visible browser demo beat (sponsor headline).
 - PlaywrightRunner on Zo (Google Forms) — reliable fallback.
-- PlannedAction generation + Codex/LLM field inference with redaction.
+- PlannedAction generation + fill-tier classification (§6.3.5) + Codex/LLM **draft** generation
+  (anti-bias rules) + short-field `llm_inferred` with redaction.
 
 ### Engineer C — Frontend, API, Ranking & Notify (owns **Zo delivery**)
 - API gateway (Fastify + zod) + typed client generation.
 - Ranking service (deterministic phase + LLM/Codex reasons).
 - Frontend: feed, **event detail + Exa drawer** (§6.3.0), **autofill reveal** (§6.3.1),
-  **registered success** (§6.3.2), **profile setup** (§6.3.3).
+  **registered success** (§6.3.2), **profile basics** (§6.3.3), **voice onboarding** (§6.3.4).
 - Notify service (Zo **Telegram** delivery — deferred post-M2; see §13).
 
 ### Co-owned / glue
@@ -865,10 +940,11 @@ Each engineer owns a vertical slice end-to-end so no one is blocked waiting for 
 - **`earlybirds-desktop`** connects; SimulangRunner fills Luma locally.
 - Autofill reveal screen (§6.3.1): agent feed + form mirror + confirm gate; stops at `awaiting_approval`.
 - Confirm & submit → registered success screen (§6.3.2). **This is the demo.**
-- Profile setup screen (§6.3.3) — can pre-seed for demo.
+- Profile basics (§6.3.3) — can pre-seed for demo; voice onboarding (§6.3.4) optional for M2.
 - Notify countdown on the event card (mono numerals, §6.2).
 
 **M3 — Sponsor depth & polish**
+- **Voice onboarding** (§6.3.4) + field fill tiers / draft policy wired end-to-end (§6.3.5).
 - One feed card pre-seeded showing "Merged from 3 sources" (dedup result — not run live).
 - Exa citation drawer live on event detail (§6.3.0).
 - **Zo Automation** hits `/internal/cron/discover` on schedule (Exa adapter).
@@ -889,7 +965,8 @@ Each engineer owns a vertical slice end-to-end so no one is blocked waiting for 
 3. **[ZO PAUSE — deferred, §13]** Show pre-triggered **Telegram** reminder if wired by M4; otherwise skip live.
 4. **[SIMULANG PAUSE]** Click **Register** → user's local Chrome opens; autofill reveal (§6.3.1): agent feed +
    form mirror populate with mono values + teal checks.
-5. **[TRUST PAUSE]** Confirm gate unlocks → review `llm_inferred` field if present → "Ready — review, then confirm."
+5. **[TRUST PAUSE]** Confirm gate unlocks → review `llm_inferred` or **`llm_draft`** essay field
+   (editable textarea, "Draft — tailored to this event") → "Ready — review, then confirm."
 6. **[HERO]** Confirm & submit → registered success (§6.3.2): amber hero, "You're in. Worm secured.", mono confirmation code.
 
 *(Trip planning — backup slide only, not live. See §5.6.)*
@@ -910,6 +987,7 @@ Each engineer owns a vertical slice end-to-end so no one is blocked waiting for 
 | Over-broad scope (all 6 features) | Demo-driven cut: Register is must-have, the rest support it |
 | Contract churn breaking parallel work | Contract changes are human-reviewed and batched; agents stay in-stream |
 | LLM hallucinating form values | `llm_inferred` values flagged and surfaced for review, never silently submitted |
+| Draft essays biased toward past project domain | §6.3.5 anti-bias rules + separate voice/topic inputs; `llm_draft` always editable at review; demo pre-seed a cross-domain event if live draft is risky |
 
 ---
 
@@ -921,7 +999,8 @@ Each engineer owns a vertical slice end-to-end so no one is blocked waiting for 
 - ~~Simulang placement?~~ **Local agent** (`earlybirds-desktop`) on user's machine — their Chrome, their cookies.
 - ~~Discovery sources?~~ **Exa only** for hackathon (domain passes for Luma/Devpost content). Direct Devpost JSON adapter **deferred post-hackathon**.
 - ~~Exa citation drawer?~~ **Yes** — specced in §6.3.0.
-- ~~Profile setup screen?~~ **Yes** — specced in §6.3.3.
+- ~~Profile setup screen?~~ **Yes** — §6.3.3 (basics) + §6.3.4 (voice prompts).
+- ~~Essay / long-text fields?~~ **Event-themed drafts** (`llm_draft`) with anti-bias policy (§6.3.5); no registration chatbot.
 - ~~Notification channel?~~ **Telegram** via Zo — **deferred post-M2** (M4 / optional demo beat).
 
 **Deferred (post-hackathon / M4 if time)**
