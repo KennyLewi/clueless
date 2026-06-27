@@ -1,16 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import type { FeedEvent } from "@/lib/types";
 import { feedExtras } from "@/lib/mock-data";
 import { formatDateRange, formatDeadline, locationLabel } from "@/lib/format";
+import { useSaved } from "@/lib/useSaved";
 import { IconBookmark } from "./icons";
 
 export function EventCard({ event }: { event: FeedEvent }) {
   const e = event.hackathon;
   const { viaExa, merged } = feedExtras(e.id);
-  const [saved, setSaved] = useState(false);
+  const { isSaved, toggle } = useSaved();
+  const saved = isSaved(e.id);
   const deadline = formatDeadline(e.dates.registrationClosesAt);
 
   return (
@@ -45,7 +46,7 @@ export function EventCard({ event }: { event: FeedEvent }) {
           </div>
         </div>
         <button
-          onClick={() => setSaved((s) => !s)}
+          onClick={() => toggle(e.id)}
           aria-label={saved ? "Remove bookmark" : "Bookmark"}
           style={{ background: "none", border: "1px solid var(--input)", borderRadius: 9, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
         >

@@ -1,13 +1,15 @@
+"use client";
+
 import Link from "next/link";
 import { eventById } from "@/lib/mock-data";
 import { formatDateRange, formatDeadline, locationLabel } from "@/lib/format";
+import { useSaved } from "@/lib/useSaved";
 import { IconBookmark } from "@/components/icons";
 import type { Hackathon } from "@/lib/types";
 
-const SAVED_IDS = ["treehacks", "calhacks"];
-
 export default function SavedPage() {
-  const saved = SAVED_IDS.map(eventById).filter((e): e is Hackathon => !!e);
+  const { ids, toggle } = useSaved();
+  const saved = ids.map(eventById).filter((e): e is Hackathon => !!e);
 
   return (
     <div className="wrap">
@@ -29,9 +31,13 @@ export default function SavedPage() {
                 </div>
               </div>
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <span style={{ border: "1px solid var(--input)", borderRadius: 9, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <button
+                  onClick={() => toggle(e.id)}
+                  aria-label="Remove bookmark"
+                  style={{ background: "none", border: "1px solid var(--input)", borderRadius: 9, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                >
                   <IconBookmark on />
-                </span>
+                </button>
                 <Link href={`/register/${e.id}`} className="btn btn-outline">Auto-register</Link>
               </div>
             </div>
