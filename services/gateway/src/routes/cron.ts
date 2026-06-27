@@ -34,6 +34,7 @@ export const cronRoutes: FastifyPluginAsync = async (server) => {
   server.post("/discover", {
     handler: async () => {
       await discoveryQueue.add("run", { adapter: "exa" });
+      await discoveryQueue.add("run", { adapter: "luma" });
       const newMatches = await db.pendingNotification.count({ where: { sentAt: null } });
       const digest =
         newMatches > 0

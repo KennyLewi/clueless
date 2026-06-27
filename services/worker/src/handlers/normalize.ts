@@ -13,6 +13,20 @@ export const formQueue = new Queue<FormIntrospectJob>(QUEUE_NAMES.FORM_INTROSPEC
   connection: { url: REDIS_URL },
 });
 
+function inferProvider(rawUrl: string, registrationUrl?: string): string {
+  const check = (url: string) => {
+    if (url.includes("lu.ma")) return "luma";
+    if (url.includes("devpost.com")) return "devpost";
+    if (url.includes("docs.google.com/forms")) return "google_form";
+    return null;
+  };
+  if (registrationUrl) {
+    const result = check(registrationUrl);
+    if (result) return result;
+  }
+  return check(rawUrl) ?? "custom";
+}
+
 function parseLocation(raw: string | undefined): {
   mode: "online" | "in_person" | "hybrid";
   city?: string;
@@ -61,6 +75,7 @@ export async function handleNormalize(job: Job<NormalizeListingJob>) {
     themes: (fields["themes"] as string[]) ?? [],
     eligibility: fields["eligibility"] as string | undefined,
     registrationFormUrl: fields["registrationUrl"] as string | undefined,
+    registrationProvider: inferProvider(listing.rawUrl, fields["registrationUrl"] as string | undefined),
   };
 
   // Serializable transaction prevents concurrent normalize jobs for the same hackathon
@@ -88,7 +103,6 @@ export async function handleNormalize(job: Job<NormalizeListingJob>) {
       create: {
         id: hackathonId,
         url: listing.rawUrl,
-        registrationProvider: "unknown",
         sources: [source] as object[],
         ...sharedFields,
       },
