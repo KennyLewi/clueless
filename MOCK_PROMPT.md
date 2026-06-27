@@ -17,21 +17,22 @@ You already built a **clickable single-file HTML prototype** for EarlyBirds (app
 The current **"Connect once. Autofill everywhere."** screen (GitHub / Résumé / Google) stays, but add **two new screens after auth** (or after connect — your call on order, but both must exist):
 
 ### Step A — Profile basics (`§6.3.3`)
+- Eyebrow: **STEP 2 OF 3 · PROFILE BASICS**
 - Headline: **"Fill once — EarlyBirds reuses these on every form."**
-- Completeness meter (e.g. "4 of 6 fields")
-- Fields: name, email, school, skills (tags), GitHub URL
+- Completeness meter (mono, e.g. "4 of 5 fields")
+- Fields: name, email, school, GitHub URL, skills (tags)
 - Primary CTA: **Continue** (teal) → Step B
 - Secondary: **Skip for now** (returns to Discover; show a subtle degraded-state hint on feed if voice step also skipped)
 
-### Step B — Your voice (`§6.3.4`) — Hinge-style card stack
-- One question per card, progress dots, calm whitespace, **no mascot**
-- **Card 1:** "What do you want to hack on next?" — chip multi-select (AI, Climate, Fintech, DevTools, Health, …) + **"Something new to me"** chip
-- **Card 2:** "One line about you" — short text input
-- **Card 3:** "Something you've built that represents how you work" — textarea or voice-record affordance (mock is fine)
-- **Optional Card 4** (show as skippable): "What would you try outside your usual lane?" — short text
-- **Collapsed section at bottom:** "Already have a bio or project write-up?" → expandable textarea (optional paste)
-- Primary CTA on last card: **Save & find hackathons** (teal)
-- Secondary: **Skip voice step**
+### Step B — Your voice (`§6.3.4`) — single scrolling prompt page
+- Eyebrow **STEP 3 OF 3 · YOUR VOICE**, headline **"Tell us how you think."**
+- **One scrollable column of prompt cards** (not a swipeable stack), calm whitespace, **no mascot**, every field optional
+- **Prompt:** "What do you want to hack on next?" — chip multi-select (AI, Climate, Fintech, DevTools, Health, …) + **"Something new to me"** chip
+- **Prompt:** "One line about you" — short text input
+- **Prompt:** "Something you've built that represents how you work" — textarea ("we learn your voice from this, not your topic")
+- **Optional prompt:** "What would you try outside your usual lane?" — short text
+- **Emphasized paste card (strongest signal):** teal-accented "Paste an essay or write-up you're proud of" with a **best signal** badge, large textarea, and a mono word-count hint ("0 words · aim for 150+")
+- **Sticky footer** pinned while scrolling: **Back** · **Skip voice step** · **Save & find hackathons** (teal)
 
 Mock a user who built **games** but selects **Fintech** interest — this sets up the anti-bias demo below.
 
@@ -144,19 +145,19 @@ Align status pills with backend enum names where shown:
 Update the static `events` array and autofill field list:
 
 ```js
-// Example autofill fields for demo event (Fintech Forward Hackathon)
+// Example autofill fields for demo event (Fintech Forward)
 [
-  { label: "Full name", value: "Alex Chen", source: "profile", status: "done" },
-  { label: "Email", value: "alex@school.edu", source: "profile", status: "done" },
-  { label: "GitHub", value: "github.com/alexchen", source: "profile", status: "done" },
-  { label: "School", value: "NUS", source: "profile", status: "done" },
+  { label: "Full name", value: "Maya Chen", source: "profile", status: "done" },
+  { label: "Email", value: "maya.chen@berkeley.edu", source: "profile", status: "done" },
+  { label: "School", value: "UC Berkeley", source: "profile", status: "done" },
+  { label: "GitHub", value: "github.com/mayac", source: "profile", status: "done" },
   { label: "Team status", value: "Looking for teammates", source: "llm_inferred", status: "done" },
   { label: "Why do you want to join?", value: "<draft textarea>", source: "llm_draft", status: "done",
-    draftText: "I'm excited to explore payments infrastructure and fraud detection — areas I haven't built in yet, but my experience shipping fast, user-facing products means I can contribute from day one." }
+    draftText: "I'm excited to explore payments infrastructure and fraud detection — areas I haven't built in yet. My experience shipping polished, user-facing products means I can contribute from day one." }
 ]
 ```
 
-User backstory for demo honesty: Alex's proud project was a **multiplayer game**, but the draft is **fintech-themed** because the event is fintech.
+User backstory for demo honesty: Maya's proud project was a **co-op puzzle game** (built in Godot), but the draft is **fintech-themed** because the event is fintech.
 
 ---
 

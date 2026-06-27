@@ -4,960 +4,799 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EarlyBirds</title>
-<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root {
-  --text: #1A1714; --muted: #6B6560; --bg: #F6F4F1; --card: #FFFFFF; --panel: #FBFAF8;
-  --border: #E9E5DF; --teal-fill: #0F6E56; --teal: #1D9E75; --teal-tint: #EAF4EF;
-  --amber-bg: #FBEEDB; --amber-text: #7A4A06; --chip-text: #B5740E; --chip-dot: #D9920F;
-  --fail: #C2503E; --r-btn: 10px; --r-card: 16px;
-  --font: 'Hanken Grotesk', system-ui, sans-serif;
-  --mono: 'IBM Plex Mono', monospace;
+  --text:#1A1714; --mono-body:#3F3A35; --muted:#6B6560; --faint:#8A847D; --faint2:#97918A; --placeholder:#B7B2AB;
+  --card:#FFFFFF; --panel:#FBFAF8; --bg:#F6F4F1;
+  --border:#E9E5DF; --border-lt:#F0ECE6; --border-lt2:#ECE8E2; --input:#E2DED7;
+  --teal:#1D9E75; --teal-fill:#0F6E56; --teal-tint:#E6F4EE; --teal-tint2:#EAF4EF; --teal-tint3:#EDF5F1; --teal-tint-text:#3A6B59; --teal-border:#CDE6DB;
+  --amber-bg:#FBEEDB; --amber-logo:#C97B14; --amber-head:#7A4A06; --amber-sub:#9A6A1E; --amber-text:#B5740E; --amber-dot:#D9920F; --amber-panel:#FCF6EB; --amber-panel-border:#EFD9B4;
+  --red-dot:#C2503E; --red-text:#9A3B2E; --red-bg:#F7E9E6;
+  --font:'Hanken Grotesk', system-ui, sans-serif; --mono:'IBM Plex Mono', monospace;
 }
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: var(--font); background: var(--bg); color: var(--text); min-width: 720px; line-height: 1.5; font-size: 14px; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; font-size: 14px; min-width: 720px; }
 .mono { font-family: var(--mono); }
-.hidden { display: none !important; }
-
-/* Bird mark */
-.bird { stroke: var(--teal-fill); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.logo { display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 15px; }
-.logo svg { width: 28px; height: 28px; }
+button { font-family: inherit; }
+input, textarea { font-family: inherit; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: #E0DBD3; border-radius: 8px; border: 3px solid transparent; background-clip: content-box; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes fadeup { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
 /* Buttons */
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 16px; border-radius: var(--r-btn); font-family: var(--font); font-size: 14px; font-weight: 500; cursor: pointer; border: none; transition: opacity .15s; }
-.btn:hover { opacity: .88; }
-.btn-primary { background: var(--teal-fill); color: #fff; }
-.btn-outline { background: transparent; color: var(--teal-fill); border: 1.5px solid var(--teal); }
-.btn-ghost { background: transparent; color: var(--muted); border: none; padding: 8px 12px; }
-.btn-sm { padding: 6px 12px; font-size: 13px; }
-.btn:disabled, .btn.locked { opacity: .45; cursor: not-allowed; }
-.link { color: var(--teal); cursor: pointer; background: none; border: none; font-family: var(--font); font-size: 13px; text-decoration: none; }
-.link:hover { text-decoration: underline; }
+.btn { display:inline-flex; align-items:center; justify-content:center; gap:7px; border-radius:11px; font-size:14px; font-weight:600; cursor:pointer; border:none; }
+.btn-primary { background:var(--teal-fill); color:#fff; padding:12px 24px; }
+.btn-outline { background:transparent; color:var(--teal-fill); border:1px solid var(--teal); padding:8px 18px; }
+.btn-ghost { background:none; border:none; color:var(--faint); font-weight:500; font-size:14px; cursor:pointer; }
+.btn-neutral { background:none; border:1px solid var(--input); color:var(--muted); font-weight:500; padding:7px 16px; border-radius:9px; }
+.btn-sm { padding:7px 14px; font-size:12.5px; border-radius:9px; }
+.btn:disabled { background:#ECE9E4; color:#A8A39B; cursor:not-allowed; }
 
-/* Layout */
-.app { display: flex; min-height: 100vh; }
-.sidebar { width: 220px; background: var(--card); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px 12px; flex-shrink: 0; }
-.sidebar .logo { padding: 0 8px 20px; }
-.nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--r-btn); cursor: pointer; color: var(--muted); font-weight: 500; margin-bottom: 2px; }
-.nav-item:hover { background: var(--panel); color: var(--text); }
-.nav-item.active { background: var(--teal-tint); color: var(--teal-fill); }
-.nav-item .badge { margin-left: auto; background: var(--teal-fill); color: #fff; font-size: 11px; padding: 2px 7px; border-radius: 99px; font-family: var(--mono); }
-.sidebar-spacer { flex: 1; }
-.user-chip { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--border); margin-top: 12px; }
-.avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--teal-tint); color: var(--teal-fill); display: flex; align-items: center; justify-content: center; font-weight: 500; font-size: 13px; }
-.main { flex: 1; overflow: auto; }
-.screen { display: none; min-height: 100vh; }
-.screen.active { display: block; }
-.content { padding: 32px 40px; max-width: 960px; }
-.content-wide { max-width: 1100px; }
+/* Cards / inputs */
+.card { background:var(--card); border:1px solid var(--border); border-radius:16px; }
+.input { width:100%; border:1px solid var(--input); border-radius:11px; padding:12px 13px; font-size:14px; background:var(--panel); color:var(--text); }
+.input:focus, textarea:focus { outline:none; border-color:var(--teal); }
+.input-dashed { border:1px dashed #DDD8D1; background:#FCFBF9; }
+.eyebrow { font-family:var(--mono); font-size:12px; color:var(--faint); }
+.section-label { font-size:12.5px; color:var(--faint); font-weight:600; letter-spacing:0.02em; }
+.page-title { font-weight:700; font-size:26px; letter-spacing:-0.02em; margin:0; }
+.page-sub { font-size:14.5px; color:var(--muted); margin-top:5px; }
 
-/* Cards */
-.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card); padding: 20px; }
-.card-panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-card); padding: 16px; }
+/* Pills + chips */
+.pill-exa { display:inline-flex; align-items:center; gap:5px; background:var(--teal-tint); color:var(--teal-fill); font-family:var(--mono); font-size:11px; padding:3px 9px; border-radius:999px; }
+.pill-exa .dot { width:5px; height:5px; border-radius:50%; background:var(--teal); }
+.pill-merged { background:#F2EFEA; color:var(--muted); font-family:var(--mono); font-size:11px; padding:3px 9px; border-radius:999px; }
+.reason-pill { background:var(--teal-tint3); color:var(--teal-tint-text); font-size:13px; padding:5px 12px; border-radius:8px; }
+.chip-src { display:inline-flex; align-items:center; margin-top:7px; background:var(--teal-tint3); color:var(--teal-tint-text); font-family:var(--mono); font-size:10.5px; padding:2px 8px; border-radius:999px; }
+.chip-inferred { display:inline-flex; align-items:center; gap:5px; margin-top:7px; color:var(--amber-text); font-size:11px; font-weight:600; }
+.chip-inferred .dot, .chip-draft .dot { width:5px; height:5px; border-radius:50%; background:var(--amber-dot); }
+.chip-draft { display:inline-flex; align-items:center; gap:5px; color:var(--amber-text); font-size:11px; font-weight:600; }
+.filter-chip { padding:7px 14px; border-radius:999px; border:1px solid var(--input); background:#fff; color:var(--muted); font-size:13px; font-weight:500; cursor:pointer; }
+.filter-chip.active { border:1px solid var(--teal-fill); background:var(--teal-tint2); color:var(--teal-fill); font-weight:600; }
+.interest-chip { padding:9px 15px; border-radius:999px; border:1px solid var(--input); background:#fff; color:var(--muted); font-size:14px; font-weight:500; cursor:pointer; }
+.interest-chip.active { border:1px solid var(--teal-fill); background:var(--teal-tint2); color:var(--teal-fill); font-weight:600; }
 
-/* Auth / onboarding full-page */
-.full-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 40px; }
-.auth-box { width: 100%; max-width: 400px; }
-.auth-box h1 { font-size: 24px; font-weight: 500; margin-bottom: 8px; }
-.auth-box .sub { color: var(--muted); margin-bottom: 28px; }
-.field { margin-bottom: 16px; }
-.field label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
-.field input, .field textarea, .field select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-btn); font-family: var(--font); font-size: 14px; background: var(--card); color: var(--text); }
-.field input:focus, .field textarea:focus { outline: none; border-color: var(--teal); }
-.divider { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; margin: 20px 0; }
-.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
-.oauth-btns { display: flex; flex-direction: column; gap: 10px; }
-.oauth-btn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: var(--r-btn); background: var(--card); cursor: pointer; font-family: var(--font); font-size: 14px; font-weight: 500; }
-.oauth-btn:hover { background: var(--panel); }
-.trust-line { text-align: center; color: var(--muted); font-size: 12px; margin-top: 24px; }
+/* Sidebar */
+.shell { display:flex; height:100vh; background:var(--bg); }
+.sidebar { width:250px; flex-shrink:0; background:#fff; border-right:1px solid var(--border-lt2); display:flex; flex-direction:column; padding:20px 16px; }
+.brand { display:flex; align-items:center; gap:10px; padding:6px 8px 22px; font-weight:700; font-size:18px; letter-spacing:-0.01em; }
+.nav { display:flex; flex-direction:column; gap:3px; }
+.nav-item { display:flex; align-items:center; gap:12px; padding:9px 13px; border-radius:10px; font-size:14px; font-weight:500; color:var(--muted); background:transparent; border:none; width:100%; text-align:left; cursor:pointer; }
+.nav-item:hover { background:var(--panel); }
+.nav-item.active { font-weight:600; color:var(--teal-fill); background:var(--teal-tint2); }
+.user-chip { margin-top:auto; border-top:1px solid var(--border-lt); padding-top:14px; display:flex; align-items:center; gap:11px; }
+.avatar { width:36px; height:36px; border-radius:50%; background:var(--teal-fill); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:600; font-size:14px; }
+.main { flex:1; overflow:auto; }
+.wrap { max-width:920px; margin:0 auto; padding:34px 40px 60px; }
+.wrap-event { max-width:760px; }
+.wrap-narrow { max-width:720px; }
 
-/* Connect cards */
-.connect-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 28px 0; }
-.connect-card { border: 1px solid var(--border); border-radius: var(--r-card); padding: 24px; background: var(--card); cursor: pointer; transition: border-color .15s; }
-.connect-card:hover { border-color: var(--teal); }
-.connect-card.connected { border-color: var(--teal); background: var(--teal-tint); }
-.connect-card h3 { font-size: 15px; font-weight: 500; margin-bottom: 6px; }
-.connect-card p { color: var(--muted); font-size: 13px; }
+/* Full-page (auth/onboarding) */
+.page { height:100vh; background:var(--bg); display:flex; align-items:center; justify-content:center; padding:24px; overflow:auto; }
+.label { font-size:12.5px; color:var(--muted); font-weight:500; display:block; margin-bottom:7px; }
 
-/* Profile basics */
-.meter { margin-bottom: 24px; }
-.meter-bar { height: 6px; background: var(--border); border-radius: 99px; overflow: hidden; margin-top: 8px; }
-.meter-fill { height: 100%; background: var(--teal); border-radius: 99px; transition: width .3s; }
-.tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-.tag { padding: 6px 12px; border: 1px solid var(--border); border-radius: 99px; font-size: 13px; cursor: pointer; background: var(--card); }
-.tag.selected { background: var(--teal-tint); border-color: var(--teal); color: var(--teal-fill); }
-.actions-row { display: flex; gap: 12px; margin-top: 28px; align-items: center; }
+/* Form mirror fields */
+.field-box { border:1px solid var(--border); border-radius:10px; padding:10px 12px; background:var(--panel); display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:21px; }
+.field-box .val { font-family:var(--mono); font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.field-box.active { border:1.5px solid var(--teal); background:#F1FAF5; justify-content:flex-start; gap:2px; padding:9px 12px; }
+.field-box.pending { border:1px dashed #DDD8D1; background:#FCFBF9; display:block; }
+.field-box.pending-wide { min-height:42px; padding:12px; }
+.caret { display:inline-block; width:2px; height:15px; background:var(--teal-fill); margin-left:1px; animation:blink 1s step-end infinite; }
+.callout { border:1px solid var(--amber-panel-border); background:var(--amber-panel); border-radius:12px; padding:16px 18px; margin-bottom:18px; }
+.callout-eyebrow { display:inline-flex; align-items:center; gap:6px; color:var(--amber-text); font-size:11px; font-weight:700; font-family:var(--mono); letter-spacing:0.03em; }
+.callout-eyebrow .dot { width:6px; height:6px; border-radius:50%; background:var(--amber-dot); }
 
-/* Voice cards */
-.voice-stack { max-width: 520px; margin: 0 auto; }
-.voice-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card); padding: 32px; min-height: 320px; display: flex; flex-direction: column; }
-.voice-card h2 { font-size: 20px; font-weight: 500; margin-bottom: 20px; }
-.progress-dots { display: flex; gap: 8px; justify-content: center; margin-top: 24px; }
-.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
-.dot.active { background: var(--teal); }
-.dot.done { background: var(--teal); opacity: .5; }
-.collapse-section { margin-top: 32px; border-top: 1px solid var(--border); padding-top: 16px; }
-.collapse-header { cursor: pointer; color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
-.collapse-body { margin-top: 12px; }
-.voice-actions { margin-top: auto; padding-top: 24px; display: flex; gap: 12px; align-items: center; }
+/* Settings toggle */
+.toggle-track { width:42px; height:24px; border-radius:999px; border:none; cursor:pointer; position:relative; flex-shrink:0; transition:background .15s; }
+.toggle-knob { position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:#fff; transition:transform .15s; }
 
-/* Feed */
-.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
-.page-header h1 { font-size: 22px; font-weight: 500; }
-.search-bar { display: flex; gap: 12px; margin-bottom: 16px; }
-.search-bar input { flex: 1; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--r-btn); font-family: var(--font); background: var(--card); }
-.filter-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
-.filter-chip { padding: 6px 14px; border-radius: 99px; border: 1px solid var(--border); background: var(--card); font-size: 13px; cursor: pointer; }
-.filter-chip.active { background: var(--teal-tint); border-color: var(--teal); color: var(--teal-fill); }
-.event-list { display: flex; flex-direction: column; gap: 12px; }
-.event-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card); padding: 20px; cursor: pointer; transition: border-color .15s; }
-.event-card:hover { border-color: var(--teal); }
-.event-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.event-card h3 { font-size: 16px; font-weight: 500; margin-bottom: 4px; }
-.event-meta { color: var(--muted); font-size: 13px; }
-.event-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-.badge { font-size: 11px; padding: 3px 8px; border-radius: 6px; font-family: var(--mono); font-weight: 500; }
-.badge-exa { background: var(--teal-tint); color: var(--teal-fill); }
-.badge-merged { background: var(--panel); color: var(--muted); border: 1px solid var(--border); }
-.stretch-reason { color: var(--muted); font-size: 13px; margin-top: 8px; font-style: normal; }
-.event-card-actions { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
-.save-toggle { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 4px; font-family: var(--font); }
-.save-toggle.saved { color: var(--teal-fill); }
-.toggle-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
-.toggle { width: 36px; height: 20px; background: var(--border); border-radius: 99px; position: relative; cursor: pointer; }
-.toggle.on { background: var(--teal); }
-.toggle::after { content: ''; position: absolute; width: 16px; height: 16px; background: #fff; border-radius: 50%; top: 2px; left: 2px; transition: left .15s; }
-.toggle.on::after { left: 18px; }
-
-/* Event detail */
-.back-link { color: var(--muted); cursor: pointer; font-size: 13px; margin-bottom: 20px; display: inline-block; }
-.back-link:hover { color: var(--text); }
-.detail-hero { margin-bottom: 24px; }
-.detail-hero h1 { font-size: 26px; font-weight: 500; margin-bottom: 8px; }
-.countdown { font-family: var(--mono); color: var(--teal-fill); font-size: 14px; margin-bottom: 16px; }
-.match-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
-.pill { padding: 6px 12px; border-radius: 99px; font-size: 13px; background: var(--teal-tint); color: var(--teal-fill); }
-.pill-stretch { background: var(--panel); color: var(--muted); border: 1px solid var(--border); }
-.exa-drawer { border: 1px solid var(--border); border-radius: var(--r-card); overflow: hidden; margin-bottom: 24px; }
-.exa-drawer-header { padding: 14px 16px; background: var(--panel); cursor: pointer; display: flex; justify-content: space-between; font-weight: 500; font-size: 14px; }
-.exa-drawer-body { padding: 16px; border-top: 1px solid var(--border); }
-.exa-query { background: var(--panel); padding: 12px; border-radius: var(--r-btn); font-family: var(--mono); font-size: 12px; color: var(--muted); margin-bottom: 12px; word-break: break-all; }
-.citation { display: flex; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
-.citation:last-child { border-bottom: none; }
-.citation-label { font-family: var(--mono); font-size: 11px; color: var(--muted); min-width: 80px; }
-.citation-url { color: var(--teal); word-break: break-all; }
-
-/* Autofill takeover */
-.autofill { position: fixed; inset: 0; background: var(--bg); z-index: 100; display: none; flex-direction: column; }
-.autofill.active { display: flex; }
-.autofill-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid var(--border); background: var(--card); }
-.status-pill { font-family: var(--mono); font-size: 12px; padding: 4px 10px; border-radius: 99px; background: var(--teal-tint); color: var(--teal-fill); }
-.status-pill.paused { background: var(--amber-bg); color: var(--amber-text); }
-.autofill-context { padding: 16px 24px; border-bottom: 1px solid var(--border); background: var(--card); }
-.autofill-context h2 { font-size: 16px; font-weight: 500; }
-.autofill-context .deadline { font-family: var(--mono); font-size: 13px; color: var(--muted); margin-top: 4px; }
-.autofill-body { flex: 1; display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; }
-.form-column { padding: 24px; overflow-y: auto; border-right: 1px solid var(--border); }
-.agent-column { padding: 24px; overflow-y: auto; background: var(--panel); }
-.form-field { margin-bottom: 20px; position: relative; }
-.form-field label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
-.form-field .value { font-family: var(--mono); font-size: 13px; padding: 10px 36px 10px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-btn); min-height: 40px; word-break: break-word; }
-.form-field .value.empty { color: var(--muted); border-style: dashed; }
-.form-field .check { position: absolute; right: 10px; top: 34px; color: var(--teal); font-size: 16px; opacity: 0; }
-.form-field.done .check { opacity: 1; }
-.form-field.done .value { border-color: var(--teal); background: var(--teal-tint); }
-.source-chip { display: inline-block; font-family: var(--mono); font-size: 10px; padding: 2px 6px; border-radius: 4px; margin-top: 4px; background: var(--teal-tint); color: var(--teal-fill); }
-.source-chip.default { background: var(--panel); color: var(--muted); }
-.source-chip.inferred { background: transparent; color: var(--chip-text); }
-.source-chip.inferred::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--chip-dot); margin-right: 4px; vertical-align: middle; }
-.source-chip.draft { background: transparent; color: var(--chip-text); }
-.draft-textarea { width: 100%; min-height: 100px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-btn); font-family: var(--mono); font-size: 13px; resize: vertical; background: var(--card); }
-.draft-actions { margin-top: 6px; display: flex; gap: 12px; }
-.pause-banner { background: var(--amber-bg); border: 1px solid #E8D5B8; border-radius: var(--r-btn); padding: 14px 16px; margin-bottom: 20px; color: var(--amber-text); font-size: 14px; }
-.needs-input-box { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-btn); padding: 16px; margin-bottom: 20px; }
-.needs-input-box strong { font-weight: 500; }
-.agent-log { font-family: var(--mono); font-size: 12px; line-height: 1.8; color: var(--muted); }
-.agent-log .step { margin-bottom: 4px; }
-.agent-log .step.active { color: var(--teal-fill); }
-.agent-log .step.done { color: var(--text); }
-.autofill-footer { padding: 16px 24px; border-top: 1px solid var(--border); background: var(--card); display: flex; align-items: center; justify-content: space-between; }
-.footer-note { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
-.footer-note.ready { color: var(--teal-fill); }
-.footer-actions { display: flex; gap: 12px; }
-
-/* Success / failed states in autofill */
-.success-view, .failed-view { flex: 1; overflow-y: auto; padding: 32px 40px; }
-.amber-hero { background: var(--amber-bg); border-radius: var(--r-card); padding: 40px; text-align: center; margin-bottom: 24px; }
-.amber-hero h2 { font-size: 24px; font-weight: 500; color: var(--amber-text); margin: 16px 0 8px; }
-.amber-hero .confirm-code { font-family: var(--mono); font-size: 14px; color: var(--amber-text); opacity: .8; }
-.bird-animate { animation: flyIn .6s ease-out once; }
-@keyframes flyIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-.details-card { margin-bottom: 24px; }
-.next-matches { border-top: 1px solid var(--border); padding-top: 24px; }
-.next-matches h3 { font-size: 14px; font-weight: 500; color: var(--muted); margin-bottom: 12px; }
-.mini-cards { display: flex; gap: 12px; }
-.mini-card { flex: 1; border: 1px solid var(--border); border-radius: var(--r-card); padding: 14px; background: var(--card); }
-.mini-card h4 { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
-.mini-card .deadline { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-bottom: 10px; }
-.failed-view .error-box { background: #FDF2F0; border: 1px solid #F0D4CF; border-radius: var(--r-card); padding: 20px; color: var(--fail); margin-bottom: 20px; }
-.error-code { font-family: var(--mono); font-size: 12px; margin-top: 8px; }
-
-/* Registrations */
-.tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
-.tab { padding: 10px 16px; cursor: pointer; color: var(--muted); font-weight: 500; font-size: 13px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
-.tab.active { color: var(--teal-fill); border-bottom-color: var(--teal); }
-.reg-row { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; border-bottom: 1px solid var(--border); }
-.reg-row:last-child { border-bottom: none; }
-.reg-info h4 { font-size: 14px; font-weight: 500; }
-.reg-info p { color: var(--muted); font-size: 13px; margin-top: 2px; }
-.status-pill-row { font-family: var(--mono); font-size: 11px; padding: 4px 10px; border-radius: 99px; }
-.status-awaiting { background: var(--teal-tint); color: var(--teal-fill); }
-.status-needs { background: var(--amber-bg); color: var(--amber-text); }
-.status-paused { background: var(--amber-bg); color: var(--amber-text); }
-.status-success { background: var(--teal-tint); color: var(--teal-fill); }
-.status-failed { background: #FDF2F0; color: var(--fail); }
-.status-filling { background: var(--panel); color: var(--muted); border: 1px solid var(--border); }
-
-/* Notifications */
-.notif-item { display: flex; gap: 14px; padding: 16px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
-.notif-item:hover { opacity: .85; }
-.notif-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--teal); margin-top: 6px; flex-shrink: 0; }
-.notif-dot.read { background: var(--border); }
-.notif-body h4 { font-size: 14px; font-weight: 500; }
-.notif-body p { color: var(--muted); font-size: 13px; margin-top: 2px; }
-.notif-time { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-left: auto; flex-shrink: 0; }
-
-/* Profile sections */
-.section { margin-bottom: 32px; }
-.section h2 { font-size: 16px; font-weight: 500; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
-.section-grid { display: grid; grid-template-columns: 140px 1fr; gap: 12px 20px; font-size: 14px; }
-.section-grid .label { color: var(--muted); }
-.editable { cursor: pointer; border-bottom: 1px dashed transparent; }
-.editable:hover { border-bottom-color: var(--border); }
-.sample-item { padding: 12px; background: var(--panel); border-radius: var(--r-btn); margin-bottom: 8px; font-size: 13px; color: var(--muted); }
-
-/* Settings */
-.setting-row { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; border-bottom: 1px solid var(--border); }
-.setting-row:last-child { border-bottom: none; }
-.setting-info h4 { font-size: 14px; font-weight: 500; }
-.setting-info p { color: var(--muted); font-size: 13px; margin-top: 2px; }
-.connected-account { display: flex; align-items: center; gap: 10px; padding: 10px 0; }
-.connected-account .status { font-family: var(--mono); font-size: 11px; color: var(--teal); }
-
-/* Debug panel */
-.debug-panel { position: fixed; bottom: 16px; right: 16px; z-index: 200; background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card); padding: 12px; box-shadow: 0 4px 20px rgba(26,23,20,.12); max-width: 280px; }
-.debug-panel h4 { font-size: 11px; font-family: var(--mono); color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .05em; }
-.debug-btns { display: flex; flex-wrap: wrap; gap: 4px; }
-.debug-btn { font-family: var(--mono); font-size: 10px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); cursor: pointer; }
-.debug-btn:hover { border-color: var(--teal); color: var(--teal-fill); }
-.debug-btn.active { background: var(--teal-tint); border-color: var(--teal); color: var(--teal-fill); }
-.debug-nav { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
-.degraded-hint { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-btn); padding: 10px 14px; font-size: 13px; color: var(--muted); margin-bottom: 16px; }
-.empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
-.empty-state h3 { font-size: 16px; font-weight: 500; color: var(--text); margin-bottom: 8px; }
+/* Demo state picker */
+.demo-bar { position:absolute; bottom:14px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:7px; background:rgba(255,255,255,0.96); border:1px solid var(--input); border-radius:999px; padding:6px 9px; box-shadow:0 4px 16px rgba(0,0,0,.08); }
+.demo-bar .lbl { font-family:var(--mono); font-size:10px; color:#A39E97; letter-spacing:0.04em; padding:0 4px; }
+.demo-chip { padding:5px 11px; border-radius:999px; border:none; background:#F2EFEA; color:var(--muted); font-size:11.5px; font-weight:500; cursor:pointer; }
+.demo-chip.active { background:var(--teal-fill); color:#fff; font-weight:600; }
 </style>
 </head>
 <body>
-
-<!-- Auth -->
-<div id="screen-auth" class="screen active">
-  <div class="full-page">
-    <div class="auth-box">
-      <div class="logo" style="margin-bottom:28px"><svg viewBox="0 0 28 28"><path class="bird" d="M4 18 L14 6 L14 11 L24 18"/></svg> EarlyBirds</div>
-      <h1>Find hackathons. Register once.</h1>
-      <p class="sub">AI-powered discovery and auto-registration.</p>
-      <div class="field"><label>Email</label><input type="email" placeholder="you@school.edu" value="alex@school.edu"></div>
-      <button class="btn btn-primary" style="width:100%" onclick="goTo('connect')">Continue with email</button>
-      <div class="divider">or</div>
-      <div class="oauth-btns">
-        <button class="oauth-btn" onclick="goTo('connect')">Continue with Google</button>
-        <button class="oauth-btn" onclick="goTo('connect')">Continue with GitHub</button>
-      </div>
-      <p class="trust-line">We never submit anything without your confirmation.</p>
-    </div>
-  </div>
-</div>
-
-<!-- Connect -->
-<div id="screen-connect" class="screen">
-  <div class="full-page">
-    <div style="max-width:720px;width:100%">
-      <div class="logo" style="margin-bottom:28px"><svg viewBox="0 0 28 28"><path class="bird" d="M4 18 L14 6 L14 11 L24 18"/></svg> EarlyBirds</div>
-      <h1 style="font-size:24px;font-weight:500;margin-bottom:8px">Connect once. Autofill everywhere.</h1>
-      <p style="color:var(--muted);margin-bottom:8px">Link sources so EarlyBirds can fill registration forms for you.</p>
-      <div class="connect-grid">
-        <div class="connect-card connected" onclick="this.classList.toggle('connected')"><h3>GitHub</h3><p>Repos, skills, and profile URL</p></div>
-        <div class="connect-card" onclick="this.classList.toggle('connected')"><h3>Resume</h3><p>Upload PDF for structured extraction</p></div>
-        <div class="connect-card" onclick="this.classList.toggle('connected')"><h3>Google</h3><p>Calendar and form autofill</p></div>
-      </div>
-      <div class="actions-row"><button class="btn btn-primary" onclick="goTo('profile-basics')">Continue</button><button class="btn btn-ghost" onclick="goTo('profile-basics')">Skip for now</button></div>
-    </div>
-  </div>
-</div>
-
-<!-- Profile Basics -->
-<div id="screen-profile-basics" class="screen">
-  <div class="full-page">
-    <div style="max-width:520px;width:100%">
-      <h1 style="font-size:24px;font-weight:500;margin-bottom:8px">Fill once — EarlyBirds reuses these on every form.</h1>
-      <div class="meter"><span style="font-size:13px;color:var(--muted)">Profile completeness</span><div style="display:flex;justify-content:space-between;margin-top:4px"><span class="mono" style="font-size:13px">4 of 6 fields</span></div><div class="meter-bar"><div class="meter-fill" style="width:67%"></div></div></div>
-      <div class="field"><label>Full name</label><input type="text" value="Alex Chen"></div>
-      <div class="field"><label>Email</label><input type="email" value="alex@school.edu"></div>
-      <div class="field"><label>School</label><input type="text" value="NUS"></div>
-      <div class="field"><label>Skills</label><div class="tags" id="skills-tags"><span class="tag selected">TypeScript</span><span class="tag selected">React</span><span class="tag selected">Node.js</span><span class="tag" onclick="toggleTag(this)">Python</span><span class="tag" onclick="toggleTag(this)">Rust</span></div></div>
-      <div class="field"><label>GitHub URL</label><input type="text" value="github.com/alexchen" class="mono" style="font-family:var(--mono)"></div>
-      <div class="actions-row"><button class="btn btn-primary" onclick="goTo('voice')">Continue</button><button class="btn btn-ghost" onclick="skipToFeed()">Skip for now</button></div>
-    </div>
-  </div>
-</div>
-
-<!-- Voice Onboarding -->
-<div id="screen-voice" class="screen">
-  <div class="full-page" style="align-items:flex-start;padding-top:60px">
-    <div class="voice-stack">
-      <div id="voice-card-0" class="voice-card">
-        <h2>What do you want to hack on next?</h2>
-        <div class="tags" id="interest-tags">
-          <span class="tag" onclick="toggleTag(this)">AI</span><span class="tag" onclick="toggleTag(this)">Climate</span>
-          <span class="tag selected" onclick="toggleTag(this)">Fintech</span><span class="tag" onclick="toggleTag(this)">DevTools</span>
-          <span class="tag" onclick="toggleTag(this)">Health</span><span class="tag" onclick="toggleTag(this)">Web3</span>
-          <span class="tag" onclick="toggleTag(this)">Something new to me</span>
-        </div>
-        <div class="voice-actions"><button class="btn btn-primary" onclick="nextVoiceCard(1)">Next</button><button class="btn btn-ghost" onclick="skipToFeed()">Skip voice step</button></div>
-      </div>
-      <div id="voice-card-1" class="voice-card hidden">
-        <h2>One line about you</h2>
-        <div class="field"><input type="text" value="Full-stack builder who ships fast and cares about UX."></div>
-        <div class="voice-actions"><button class="btn btn-ghost" onclick="nextVoiceCard(0)">Back</button><button class="btn btn-primary" onclick="nextVoiceCard(2)">Next</button></div>
-      </div>
-      <div id="voice-card-2" class="voice-card hidden">
-        <h2>Something you've built that represents how you work</h2>
-        <div class="field"><textarea rows="4">I built a real-time multiplayer game with custom netcode — 200 concurrent players, sub-50ms latency. I obsess over performance and player experience.</textarea></div>
-        <div class="voice-actions"><button class="btn btn-ghost" onclick="nextVoiceCard(1)">Back</button><button class="btn btn-primary" onclick="nextVoiceCard(3)">Next</button></div>
-      </div>
-      <div id="voice-card-3" class="voice-card hidden">
-        <h2>What would you try outside your usual lane?</h2>
-        <p style="color:var(--muted);font-size:13px;margin-bottom:12px">Optional — helps us surface stretch matches honestly.</p>
-        <div class="field"><input type="text" value="Payments infrastructure and fraud detection"></div>
-        <div class="voice-actions"><button class="btn btn-ghost" onclick="nextVoiceCard(2)">Back</button><button class="btn btn-primary" onclick="finishVoice()">Save & find hackathons</button><button class="btn btn-ghost" onclick="skipToFeed()">Skip</button></div>
-      </div>
-      <div class="progress-dots" id="voice-dots"><span class="dot active"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
-      <div class="collapse-section">
-        <div class="collapse-header" onclick="document.getElementById('paste-area').classList.toggle('hidden')">Already have a bio or project write-up? <span style="margin-left:auto">+</span></div>
-        <div id="paste-area" class="collapse-body hidden"><textarea rows="3" placeholder="Paste existing bio or project description..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:var(--r-btn);font-family:var(--font)"></textarea></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- App Shell -->
-<div id="app-shell" class="app hidden">
-  <aside class="sidebar">
-    <div class="logo"><svg viewBox="0 0 28 28"><path class="bird" d="M4 18 L14 6 L14 11 L24 18"/></svg> EarlyBirds</div>
-    <div class="nav-item active" data-nav="discover" onclick="navTo('discover')">Discover</div>
-    <div class="nav-item" data-nav="saved" onclick="navTo('saved')">Saved</div>
-    <div class="nav-item" data-nav="registrations" onclick="navTo('registrations')">Registrations</div>
-    <div class="nav-item" data-nav="notifications" onclick="navTo('notifications')">Notifications <span class="badge">3</span></div>
-    <div class="nav-item" data-nav="profile" onclick="navTo('profile')">Profile</div>
-    <div class="nav-item" data-nav="settings" onclick="navTo('settings')">Settings</div>
-    <div class="sidebar-spacer"></div>
-    <div class="user-chip"><div class="avatar">AC</div><div><div style="font-weight:500;font-size:13px">Alex Chen</div><div style="font-size:12px;color:var(--muted)">alex@school.edu</div></div></div>
-  </aside>
-  <main class="main">
-
-    <!-- Discover -->
-    <div id="screen-discover" class="screen active">
-      <div class="content content-wide">
-        <div id="degraded-hint" class="degraded-hint hidden">Voice step skipped — generative drafts and stretch ranking may be less accurate. <span class="link" onclick="goTo('voice')">Complete your voice</span></div>
-        <div class="page-header"><h1>Discover</h1><div class="toggle-row">Auto-register <div class="toggle on" id="auto-reg-toggle" onclick="this.classList.toggle('on')"></div></div></div>
-        <div class="search-bar"><input type="text" placeholder="Search hackathons..." value="fintech asia 2026"><button class="btn btn-outline btn-sm">Search</button></div>
-        <div class="filter-chips">
-          <span class="filter-chip active">All</span><span class="filter-chip">AI</span><span class="filter-chip">Fintech</span>
-          <span class="filter-chip">Online</span><span class="filter-chip">This week</span>
-        </div>
-        <div class="event-list" id="event-list"></div>
-      </div>
-    </div>
-
-    <!-- Saved -->
-    <div id="screen-saved" class="screen">
-      <div class="content content-wide">
-        <div class="page-header"><h1>Saved</h1></div>
-        <div class="event-list" id="saved-list"></div>
-      </div>
-    </div>
-
-    <!-- Event Detail -->
-    <div id="screen-event-detail" class="screen">
-      <div class="content">
-        <span class="back-link" onclick="navTo('discover')">← Back to Discover</span>
-        <div id="event-detail-content"></div>
-      </div>
-    </div>
-
-    <!-- Registrations -->
-    <div id="screen-registrations" class="screen">
-      <div class="content">
-        <div class="page-header"><h1>Registrations</h1></div>
-        <div class="tabs"><span class="tab active" onclick="filterRegs('all',this)">All</span><span class="tab" onclick="filterRegs('active',this)">Active</span><span class="tab" onclick="filterRegs('needs',this)">Needs you</span><span class="tab" onclick="filterRegs('done',this)">Registered</span></div>
-        <div class="card" id="reg-list"></div>
-      </div>
-    </div>
-
-    <!-- Notifications -->
-    <div id="screen-notifications" class="screen">
-      <div class="content">
-        <div class="page-header"><h1>Notifications</h1></div>
-        <div class="card" id="notif-list"></div>
-      </div>
-    </div>
-
-    <!-- Profile -->
-    <div id="screen-profile" class="screen">
-      <div class="content">
-        <div class="page-header"><h1>Profile</h1></div>
-        <div class="section"><h2>Basics</h2>
-          <div class="section-grid">
-            <span class="label">Name</span><span class="editable">Alex Chen</span>
-            <span class="label">Email</span><span class="editable mono">alex@school.edu</span>
-            <span class="label">School</span><span class="editable">NUS</span>
-            <span class="label">Skills</span><span><span class="tag selected" style="cursor:default">TypeScript</span> <span class="tag selected" style="cursor:default">React</span> <span class="tag selected" style="cursor:default">Node.js</span></span>
-            <span class="label">GitHub</span><span class="editable mono">github.com/alexchen</span>
-          </div>
-        </div>
-        <div class="section"><h2>Your voice</h2>
-          <div class="section-grid">
-            <span class="label">Interests</span><span><span class="tag selected" style="cursor:default">Fintech</span></span>
-            <span class="label">One-liner</span><span class="editable">Full-stack builder who ships fast and cares about UX.</span>
-            <span class="label">Proud project</span><span class="editable">Real-time multiplayer game with custom netcode — 200 concurrent players...</span>
-            <span class="label">Outside lane</span><span class="editable">Payments infrastructure and fraud detection</span>
-          </div>
-        </div>
-        <div class="section"><h2>Writing samples</h2>
-          <div class="sample-item">"I built a real-time multiplayer game with custom netcode — 200 concurrent players, sub-50ms latency..." <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">voice</span></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Settings -->
-    <div id="screen-settings" class="screen">
-      <div class="content">
-        <div class="page-header"><h1>Settings</h1></div>
-        <div class="card" style="margin-bottom:16px">
-          <h3 style="font-size:15px;font-weight:500;margin-bottom:4px">Autofill</h3>
-          <div class="setting-row"><div class="setting-info"><h4>Auto-register saved events</h4><p>Start registration when deadline is within 48h</p></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
-          <div class="setting-row"><div class="setting-info"><h4>Human approval required</h4><p>Always pause before final submit</p></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
-          <div class="setting-row"><div class="setting-info"><h4>Local browser runner</h4><p>Use Simulang via earlybirds-desktop</p></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
-        </div>
-        <div class="card" style="margin-bottom:16px">
-          <h3 style="font-size:15px;font-weight:500;margin-bottom:12px">Connected accounts</h3>
-          <div class="connected-account"><span>GitHub</span><span class="status">connected</span><button class="btn btn-ghost btn-sm" style="margin-left:auto">Disconnect</button></div>
-          <div class="connected-account"><span>Google</span><span class="status" style="color:var(--muted)">not connected</span><button class="btn btn-outline btn-sm" style="margin-left:auto">Connect</button></div>
-        </div>
-        <div class="card">
-          <h3 style="font-size:15px;font-weight:500;margin-bottom:12px">Privacy</h3>
-          <div class="setting-row"><div class="setting-info"><h4>Store form screenshots</h4><p>Keep debug artifacts from registration runs</p></div><div class="toggle" onclick="this.classList.toggle('on')"></div></div>
-          <div class="setting-row"><div class="setting-info"><h4>Share anonymized usage</h4><p>Help improve ranking models</p></div><div class="toggle" onclick="this.classList.toggle('on')"></div></div>
-        </div>
-      </div>
-    </div>
-  </main>
-</div>
-
-<!-- Autofill Takeover -->
-<div id="autofill" class="autofill">
-  <div id="autofill-main">
-    <div class="autofill-header">
-      <div class="logo"><svg viewBox="0 0 28 28"><path class="bird" d="M4 18 L14 6 L14 11 L24 18"/></svg> EarlyBirds</div>
-      <span class="status-pill" id="af-status-pill">auto-registering</span>
-      <button class="btn btn-ghost btn-sm" onclick="closeAutofill()">Cancel</button>
-    </div>
-    <div class="autofill-context"><h2 id="af-event-name">Fintech Forward Hackathon</h2><div class="deadline" id="af-deadline">Registration closes in 2d 14h 32m</div></div>
-    <div class="autofill-body" id="af-body">
-      <div class="form-column" id="af-form-col">
-        <div id="af-pause-banner" class="pause-banner hidden"></div>
-        <div id="af-needs-input" class="needs-input-box hidden"></div>
-        <div id="af-fields"></div>
-      </div>
-      <div class="agent-column"><div class="agent-log" id="af-agent-log"></div></div>
-    </div>
-    <div class="autofill-footer" id="af-footer">
-      <div class="footer-note" id="af-footer-note">Nothing is submitted until you confirm</div>
-      <div class="footer-actions">
-        <button class="btn btn-ghost" onclick="closeAutofill()">Cancel</button>
-        <button class="btn btn-primary locked" id="af-confirm-btn" disabled onclick="confirmSubmit()">Confirm & submit</button>
-        <button class="btn btn-outline hidden" id="af-resume-btn" onclick="resumeAutofill()">Resume</button>
-      </div>
-    </div>
-  </div>
-  <div id="autofill-success" class="success-view hidden">
-    <div class="amber-hero bird-animate"><svg viewBox="0 0 28 28" style="width:48px;height:48px"><path class="bird" d="M4 18 L14 6 L14 11 L24 18" style="stroke:var(--amber-text)"/></svg><h2>You're in. Worm secured.</h2><p style="color:var(--amber-text);margin-bottom:8px">Fintech Forward Hackathon</p><div class="confirm-code">CONF-FFH-2026-A7X3</div></div>
-    <div class="card details-card"><h3 style="font-weight:500;margin-bottom:12px">Confirmation details</h3><div class="section-grid"><span class="label">When</span><span>Mar 15–16, 2026</span><span class="label">Where</span><span>Singapore (hybrid)</span><span class="label">Email</span><span class="mono">Confirmation sent to alex@school.edu</span></div><div style="margin-top:16px;display:flex;gap:12px"><button class="btn btn-primary btn-sm">Add to calendar</button><button class="btn btn-outline btn-sm">View confirmation</button></div></div>
-    <div class="next-matches"><h3>Up next for you</h3><div class="mini-cards"><div class="mini-card"><h4>Climate Tech Sprint</h4><div class="deadline">Closes in 5d</div><button class="btn btn-outline btn-sm" onclick="openAutofill('filling')">Register</button></div><div class="mini-card"><h4>AI Builders Weekend</h4><div class="deadline">Closes in 9d</div><button class="btn btn-outline btn-sm" onclick="openAutofill('filling')">Register</button></div></div></div>
-    <div style="margin-top:24px"><button class="btn btn-ghost" onclick="closeAutofill();navTo('discover')">Back to feed</button></div>
-  </div>
-  <div id="autofill-failed" class="failed-view hidden">
-    <div class="error-box"><h3 style="font-weight:500;margin-bottom:8px">Registration failed</h3><p>The form submission was rejected by the provider.</p><div class="error-code">ERR_SUBMIT_REJECTED · stage: submitting</div></div>
-    <div style="display:flex;gap:12px"><button class="btn btn-outline" onclick="setAutofillState('awaiting_approval')">Retry</button><button class="btn btn-ghost" onclick="closeAutofill()">Open form manually</button></div>
-  </div>
-</div>
-
-<!-- Debug Panel -->
-<div class="debug-panel" id="debug-panel">
-  <h4>Screen</h4>
-  <div class="debug-btns" id="debug-screens"></div>
-  <div class="debug-nav"><h4>Autofill state</h4><div class="debug-btns" id="debug-states"></div></div>
-</div>
-
+<div id="app"></div>
 <script>
+/* ============================== MOCK DATA ============================== */
+const DRAFT_HW = "Drawn to the hardware track — I've been shipping fast, user-facing side projects and want a weekend to build something end-to-end with a team.";
+const DRAFT_FIN = "I'm excited to explore payments infrastructure and fraud detection — areas I haven't built in yet. My experience shipping polished, user-facing products means I can contribute from day one.";
+
 const EVENTS = [
-  { id: 'ffh', title: 'Fintech Forward Hackathon', location: 'Singapore · Hybrid', deadline: '2d 14h', themes: ['fintech','ai'], viaExa: true, merged: 3, stretch: true, stretchReason: 'Outside your usual lane — fintech, 2 days', saved: true, reasons: ['Matches Fintech interest','Strong fit for full-stack builders'], exaQuery: 'upcoming fintech hackathons open registration Singapore 2026', citations: [{field:'dates',url:'luma.com/fintech-forward-2026'},{field:'eligibility',url:'devpost.com/ffh/rules'},{field:'prizes',url:'fintechforward.sg/prizes'}] },
-  { id: 'cts', title: 'Climate Tech Sprint', location: 'Online', deadline: '5d 8h', themes: ['climate'], viaExa: true, merged: 0, stretch: false, saved: false, reasons: ['Climate interest overlap','Online — no travel'], exaQuery: 'climate tech hackathon online registration 2026', citations: [{field:'dates',url:'devpost.com/climate-sprint'}] },
-  { id: 'abw', title: 'AI Builders Weekend', location: 'Bangkok · In person', deadline: '9d 3h', themes: ['ai','devtools'], viaExa: false, merged: 2, stretch: false, saved: true, reasons: ['AI + DevTools match','Weekend format'], exaQuery: '', citations: [] },
-  { id: 'hth', title: 'HealthTech Hack', location: 'Online', deadline: '12d', themes: ['health'], viaExa: true, merged: 0, stretch: false, saved: false, reasons: ['Health theme available'], exaQuery: 'healthtech hackathon 2026', citations: [] }
+  { id:'fintech', title:'Fintech Forward', place:'Singapore', dates:'May 9–11, 2026', deadline:'2d 03h', short:'closes in 2d 03h', reason:'Outside your usual lane — fintech, 2 days.', viaExa:true, merged:false, remote:false, closingSoon:true, stretch:true,
+    reasons:['Outside your usual lane','Beginner-friendly track','Team size 1–4','Travel grant available'],
+    query:'fintech forward hackathon 2026 registration deadline',
+    sources:[{label:'Deadline',url:'fintechforward.io/apply',conf:'95%'},{label:'Eligibility',url:'fintechforward.io/faq',conf:'90%'}], draft:DRAFT_FIN },
+  { id:'treehacks', title:'TreeHacks 2026', place:'Stanford, CA', dates:'Feb 13–15, 2026', deadline:'2d 14h 32m', short:'closes in 2d 14h 32m', reason:'Matches your ML + hardware interests.', viaExa:true, merged:false, remote:false, closingSoon:true,
+    reasons:['ML + hardware','Travel under 1 hour','Team size 1–4','Hardware track'],
+    query:'treehacks 2026 application deadline site:treehacks.com',
+    sources:[{label:'Deadline',url:'treehacks.com/apply',conf:'98%'},{label:'Location',url:'devpost.com/treehacks-2026',conf:'94%'},{label:'Eligibility',url:'treehacks.com/faq',conf:'89%'}], draft:DRAFT_HW },
+  { id:'ethbangkok', title:'ETHGlobal Bangkok', place:'Bangkok, TH', dates:'Mar 6–8, 2026', deadline:'12d 06h', short:'closes in 12d 06h', reason:'You starred two Solidity repos last month.', viaExa:false, merged:true, remote:false, closingSoon:false,
+    reasons:['Solidity experience','Crypto track','Travel grant available'],
+    query:'ethglobal bangkok 2026 registration deadline',
+    sources:[{label:'Deadline',url:'ethglobal.com/events/bangkok',conf:'96%'},{label:'Travel',url:'ethglobal.com/faq',conf:'91%'}], draft:DRAFT_HW },
+  { id:'calhacks', title:'Cal Hacks 12.0', place:'UC Berkeley', dates:'Apr 3–5, 2026', deadline:'5d 18h', short:'closes in 5d 18h', reason:"Travel-free — you're 20 minutes away.", viaExa:false, merged:false, remote:false, closingSoon:true,
+    reasons:['Local — no travel','Beginner-friendly','Team size 1–4'],
+    query:'cal hacks 12.0 registration deadline',
+    sources:[{label:'Deadline',url:'calhacks.io',conf:'97%'}], draft:DRAFT_HW },
+  { id:'pioneer', title:'Pioneer Summer Build', place:'Remote', dates:'Jun 1 – Aug 1', deadline:'20d', short:'closes in 20d', reason:'Solo-friendly with async judging.', viaExa:true, merged:false, remote:true, closingSoon:false,
+    reasons:['Remote','Solo-friendly','Async judging'],
+    query:'pioneer summer build application deadline',
+    sources:[{label:'Format',url:'pioneer.app',conf:'92%'}], draft:DRAFT_HW },
 ];
 
-const AUTOFILL_FIELDS = [
-  { key: 'full_name', label: 'Full name', value: 'Alex Chen', source: 'profile', type: 'text' },
-  { key: 'email', label: 'Email', value: 'alex@school.edu', source: 'profile', type: 'text' },
-  { key: 'github', label: 'GitHub', value: 'github.com/alexchen', source: 'profile', type: 'text' },
-  { key: 'school', label: 'School', value: 'NUS', source: 'profile', type: 'text' },
-  { key: 'team_status', label: 'Team status', value: '', source: 'llm_inferred', type: 'text', inferredValue: 'Looking for teammates' },
-  { key: 'why_join', label: 'Why do you want to join?', value: '', source: 'llm_draft', type: 'draft',
-    draftText: "I'm excited to explore payments infrastructure and fraud detection — areas I haven't built in yet, but my experience shipping fast, user-facing products means I can contribute from day one." }
+const REGS_RAW = [
+  { id:'treehacks', title:'TreeHacks 2026', place:'Stanford, CA', deadline:'2d 14h', status:'awaiting' },
+  { id:'fintech', title:'Fintech Forward', place:'Singapore', deadline:'2d 03h', status:'paused' },
+  { id:'mlh', title:'MLH Spring Kickoff', place:'Remote', deadline:'submitted', status:'registered' },
+  { id:'ethbangkok', title:'ETHGlobal Bangkok', place:'Bangkok, TH', deadline:'12d 06h', status:'needsinput' },
+  { id:'calhacks', title:'Cal Hacks 12.0', place:'UC Berkeley', deadline:'5d 18h', status:'filling' },
+  { id:'pennapps', title:'PennApps XXVI', place:'Philadelphia, PA', deadline:'1d 03h', status:'failed' },
 ];
 
-const REGISTRATIONS = [
-  { id: 'r1', event: 'Fintech Forward Hackathon', status: 'awaiting_approval', time: '2 min ago' },
-  { id: 'r2', event: 'AI Builders Weekend', status: 'needs_input', time: '1 hr ago' },
-  { id: 'r3', event: 'DevTools Dash', status: 'captcha_encountered', time: '3 hr ago' },
-  { id: 'r4', event: 'Web3 Wave', status: 'oauth_redirect', time: 'Yesterday' },
-  { id: 'r5', event: 'Climate Tech Sprint', status: 'succeeded', time: '2 days ago' },
-  { id: 'r6', event: 'HealthTech Hack', status: 'failed', time: '3 days ago' },
-  { id: 'r7', event: 'Startup Weekend SG', status: 'filling', time: 'Just now' }
+const REG_META = {
+  registered:{ label:'Registered', color:'#0F6E56', bg:'#E6F4EE', dot:'#1D9E75' },
+  awaiting:{ label:'Awaiting approval', color:'#B5740E', bg:'#FBEEDB', dot:'#D9920F' },
+  needsinput:{ label:'Needs your input', color:'#B5740E', bg:'#FBEEDB', dot:'#D9920F' },
+  filling:{ label:'Auto-filling…', color:'#0F6E56', bg:'#EAF4EF', dot:'#0F6E56' },
+  paused:{ label:'Paused — action needed', color:'#B5740E', bg:'#FBEEDB', dot:'#D9920F' },
+  failed:{ label:'Failed', color:'#9A3B2E', bg:'#F7E9E6', dot:'#C2503E' },
+};
+
+const NOTIF_COLOR = { needs:'#D9920F', awaiting:'#D9920F', success:'#1D9E75', deadline:'#97918A', found:'#1D9E75' };
+const NOTIFS = [
+  { time:'2m ago', type:'needs', text:'ETHGlobal Bangkok needs your input — team status.' },
+  { time:'1h ago', type:'success', text:"You're registered for MLH Spring Kickoff." },
+  { time:'3h ago', type:'awaiting', text:'TreeHacks 2026 is filled and ready for your approval.' },
+  { time:'1d ago', type:'deadline', text:'Cal Hacks 12.0 closes in 5 days.' },
+  { time:'2d ago', type:'found', text:'3 new events matched your profile.' },
 ];
 
-const NOTIFICATIONS = [
-  { title: 'Registration ready for review', body: 'Fintech Forward Hackathon — confirm your submission', time: '2m', unread: true, action: () => openAutofill('awaiting_approval', true) },
-  { title: 'New match: Climate Tech Sprint', body: 'Score 0.82 — matches your climate interest', time: '1h', unread: true },
-  { title: 'Input needed', body: 'AI Builders Weekend form asks for team name', time: '3h', unread: true, action: () => openAutofill('needs_input', true) },
-  { title: 'Deadline reminder', body: 'Fintech Forward closes in 2 days', time: '1d', unread: false },
-  { title: 'Registration confirmed', body: 'Climate Tech Sprint — you\'re in!', time: '2d', unread: false }
+const SETTING_DEFS = [
+  { key:'requireApproval', label:'Require my approval before submitting', desc:'The agent fills forms but never submits until you confirm.' },
+  { key:'inferAnswers', label:'Let the agent draft open-ended answers', desc:'Drafts answers like "Why do you want to join?" for your review.' },
+  { key:'notifyClosing', label:'Notify me before deadlines', desc:'Heads-up 48 hours before a matched event closes.' },
+  { key:'batch', label:'Batch auto-register', desc:'Queue several matched events and register in one run.' },
 ];
+const CONN_DEFS = [
+  { key:'github', name:'GitHub', detail:'github.com/mayac' },
+  { key:'google', name:'Google', detail:'Calendar + email sync' },
+  { key:'resume', name:'Résumé', detail:'maya-chen-resume.pdf' },
+];
+const INTERESTS = ['AI','Climate','Fintech','DevTools','Health','Hardware','Crypto','Education','Something new to me'];
+const AF_STEPS = [['filling','Filling'],['needsinput','Needs input'],['captcha','CAPTCHA'],['oauth','OAuth'],['awaiting','Awaiting'],['submitting','Submitting'],['success','Success'],['failed','Failed']];
 
-let currentScreen = 'auth';
-let voiceCard = 0;
-let voiceSkipped = false;
-let autofillState = 'idle';
-let filledCount = 0;
-let autoTimers = [];
-let manualOverride = false;
-let fieldStates = {};
+/* ============================== STATE ============================== */
+const state = {
+  route: 'auth',
+  afStep: 'filling',
+  selected: null,            // event id
+  feedFilter: 'all',
+  regFilter: 'all',
+  interests: ['Fintech','AI','DevTools'],
+  draftText: null,
+  saved: { treehacks:true, ethbangkok:false, calhacks:false, pioneer:true, fintech:false },
+  settings: { requireApproval:true, inferAnswers:true, notifyClosing:true, batch:false },
+  connected: { github:true, google:false, resume:true },
+};
+let timers = [];
+const evById = (id) => EVENTS.find(e => e.id === id) || EVENTS[0];
+const currentSel = () => state.selected ? evById(state.selected) : EVENTS[0];
 
-const SCREENS = ['auth','connect','profile-basics','voice','discover','saved','event-detail','registrations','notifications','profile','settings'];
-const AF_STATES = ['filling','needs_input','captcha_encountered','oauth_redirect','awaiting_approval','submitting','succeeded','failed'];
+/* ============================== ACTIONS ============================== */
+const App = {
+  clearTimers() { timers.forEach(t => clearTimeout(t)); timers = []; },
+  set(patch) { Object.assign(state, patch); render(); },
+  go(route) { this.clearTimers(); this.set({ route }); },
+  openEvent(id) { this.clearTimers(); this.set({ selected:id, route:'event' }); },
+  startAutofill(id) {
+    this.clearTimers();
+    this.set({ selected:id, route:'autofill', afStep:'filling', draftText:null });
+    timers.push(setTimeout(() => this.set({ afStep:'needsinput' }), 2600));
+  },
+  openAutofillAt(id, step) { this.clearTimers(); this.set({ selected:id, route:'autofill', afStep:step, draftText:null }); },
+  setAfStep(step) { this.clearTimers(); this.set({ afStep:step }); },
+  resume() { this.clearTimers(); this.set({ afStep:'awaiting' }); },
+  submitNeedsInput() { this.clearTimers(); this.set({ afStep:'awaiting' }); },
+  confirmSubmit() { this.clearTimers(); this.set({ afStep:'submitting' }); timers.push(setTimeout(() => this.set({ afStep:'success' }), 1800)); },
+  retry() { this.clearTimers(); this.set({ afStep:'submitting' }); timers.push(setTimeout(() => this.set({ afStep:'success' }), 1600)); },
+  toggleSave(id) { state.saved = { ...state.saved, [id]: !state.saved[id] }; render(); },
+  toggleSetting(k) { state.settings = { ...state.settings, [k]: !state.settings[k] }; render(); },
+  toggleConnected(k) { state.connected = { ...state.connected, [k]: !state.connected[k] }; render(); },
+  setFeedFilter(f) { this.set({ feedFilter:f }); },
+  setRegFilter(f) { this.set({ regFilter:f }); },
+  toggleInterest(t) { state.interests = state.interests.includes(t) ? state.interests.filter(x=>x!==t) : [...state.interests, t]; render(); },
+  regenerate() { this.set({ draftText: currentSel().draft || DRAFT_FIN }); },
+  shorten() { const d = (currentSel().draft || DRAFT_FIN); this.set({ draftText: d.split('.')[0] + '.' }); },
+};
+window.App = App;
 
-function init() {
-  renderEvents();
-  renderSaved();
-  renderRegistrations();
-  renderNotifications();
-  initDebug();
-  document.querySelectorAll('.filter-chip').forEach(c => c.onclick = function() {
-    document.querySelectorAll('.filter-chip').forEach(x => x.classList.remove('active'));
-    this.classList.add('active');
-  });
+/* ============================== ICONS ============================== */
+function bird(size, color) {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 28 28" fill="none"><path d="M4 18 L14 6 L14 11 L24 18" stroke="${color||'#0F6E56'}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"></path></svg>`;
+}
+const ICONS = {
+  discover:'<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"></path></svg>',
+  saved:'<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M6 4h12v16l-6-4-6 4z"></path></svg>',
+  regs:'<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8.5 12l2.5 2.5 4.5-5"></path></svg>',
+  notif:'<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z"></path><path d="M10 20a2 2 0 0 0 4 0"></path></svg>',
+  profile:'<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="8" r="3.4"></circle><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"></path></svg>',
+  settings:'<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"></path><circle cx="16" cy="7" r="2.3"></circle><circle cx="8" cy="17" r="2.3"></circle></svg>',
+  search:'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#A39E97" stroke-width="2" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4-4" stroke-linecap="round"></path></svg>',
+  check:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="flex-shrink:0;"><path d="M3 8.5 L6.5 12 L13 4" stroke="#1D9E75" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>',
+  bookmarkOn:'<svg width="15" height="15" viewBox="0 0 24 24" fill="#0F6E56" stroke="#0F6E56" stroke-width="1.8" stroke-linejoin="round"><path d="M6 4h12v16l-6-4-6 4z"></path></svg>',
+  bookmarkOff:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#97918A" stroke-width="1.8" stroke-linejoin="round"><path d="M6 4h12v16l-6-4-6 4z"></path></svg>',
+  lock:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="2" stroke="#97918A" stroke-width="2"></rect><path d="M8 11 V8 a4 4 0 0 1 8 0 V11" stroke="#97918A" stroke-width="2"></path></svg>',
+  shield:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3 L20 6 V11 C20 16 16 20 12 21 C8 20 4 16 4 11 V6 Z" stroke="#0F6E56" stroke-width="2" stroke-linejoin="round"></path><path d="M9 12 L11.5 14.5 L15.5 9.5" stroke="#0F6E56" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>',
+};
+const SPINNER = (b) => `<span style="width:${b||12}px;height:${b||12}px;border:2px solid #BBD8CC;border-top-color:#0F6E56;border-radius:50%;display:inline-block;animation:spin 0.8s linear infinite;"></span>`;
+
+/* ============================== AUTH / ONBOARDING ============================== */
+function renderAuth() {
+  return `<div class="page">
+    <div class="card" style="width:400px; padding:38px 36px; box-shadow:0 2px 10px rgba(0,0,0,.04); border-radius:20px;">
+      <div class="brand" style="padding:0; margin-bottom:26px;">${bird(26)}<span style="font-size:20px;">EarlyBirds</span></div>
+      <div style="font-weight:700; font-size:23px; letter-spacing:-0.01em;">Catch the worm first.</div>
+      <div style="font-size:14.5px; color:var(--muted); margin-top:8px; line-height:1.5;">Sign in and let the agent register you for the events that fit — before the deadlines pass.</div>
+      <label class="label" style="margin:24px 0 7px;">Email</label>
+      <input class="input" type="text" value="maya.chen@berkeley.edu">
+      <button class="btn btn-primary" style="width:100%; margin-top:14px; padding:13px;" onclick="App.go('onboard')">Continue with email</button>
+      <div style="display:flex; align-items:center; gap:12px; margin:22px 0; color:var(--placeholder); font-size:12.5px;"><div style="flex:1; height:1px; background:#EDE9E3;"></div>or<div style="flex:1; height:1px; background:#EDE9E3;"></div></div>
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <button class="input" style="background:#fff; font-weight:500; cursor:pointer; text-align:center; padding:11px;" onclick="App.go('onboard')">Continue with Google</button>
+        <button class="input" style="background:#fff; font-weight:500; cursor:pointer; text-align:center; padding:11px;" onclick="App.go('onboard')">Continue with GitHub</button>
+      </div>
+      <div style="text-align:center; font-size:12.5px; color:var(--faint2); margin-top:24px; line-height:1.5;">We never submit anything without your confirmation.</div>
+    </div>
+  </div>`;
 }
 
-function goTo(screen) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  const el = document.getElementById('screen-' + screen);
-  if (el) el.classList.add('active');
-  currentScreen = screen;
-  const shellScreens = ['discover','saved','event-detail','registrations','notifications','profile','settings'];
-  document.getElementById('app-shell').classList.toggle('hidden', !shellScreens.includes(screen));
-  if (shellScreens.includes(screen)) {
-    document.getElementById('app-shell').classList.remove('hidden');
-    document.querySelectorAll('#app-shell > .main > .screen').forEach(s => s.classList.remove('active'));
-    document.getElementById('screen-' + screen).classList.add('active');
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.nav === screen || (screen === 'event-detail' && n.dataset.nav === 'discover')));
-  }
-  updateDebug();
+function renderOnboard() {
+  const row = (icon, name, detail, btn) => `<div style="display:flex; align-items:center; gap:14px; border:1px solid var(--border); border-radius:14px; padding:16px 18px;">
+    <div style="width:42px; height:42px; border-radius:11px; background:#F4F2EE; display:flex; align-items:center; justify-content:center; flex-shrink:0;">${icon}</div>
+    <div style="flex:1;"><div style="font-weight:600; font-size:15px;">${name}</div><div style="font-size:13px; color:var(--faint);">${detail}</div></div>${btn}</div>`;
+  const connectedBtn = (label) => `<button style="background:var(--teal-tint2); color:var(--teal-fill); border:1px solid var(--teal-border); padding:8px 15px; border-radius:9px; font-size:13px; font-weight:600; cursor:pointer;">${label}</button>`;
+  const connectBtn = `<button class="btn btn-primary" style="padding:8px 15px; border-radius:9px; font-size:13px;">Connect</button>`;
+  return `<div class="page">
+    <div class="card" style="width:520px; padding:38px 40px; box-shadow:0 2px 10px rgba(0,0,0,.04); border-radius:20px;">
+      <div class="eyebrow">STEP 1 OF 3 · CONNECT YOUR SOURCES</div>
+      <div style="font-weight:700; font-size:24px; letter-spacing:-0.01em; margin-top:12px;">Connect once. Autofill everywhere.</div>
+      <div style="font-size:14.5px; color:var(--muted); margin-top:8px; line-height:1.5;">EarlyBirds pulls from these to fill registration forms for you. Connect what you have — you can add the rest later.</div>
+      <div style="display:flex; flex-direction:column; gap:12px; margin-top:24px;">
+        ${row('<svg width="22" height="22" viewBox="0 0 24 24" fill="#3F3A35"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.1-1.47-1.1-1.47-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.89 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.99 1.03-2.69-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.6 1.03 2.69 0 3.84-2.34 4.69-4.57 4.94.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2z"></path></svg>', 'GitHub', 'Projects, languages, links', connectedBtn('Connected'))}
+        ${row('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3F3A35" stroke-width="1.8"><path d="M14 3v5h5"></path><path d="M7 3h7l5 5v13H7z" stroke-linejoin="round"></path><path d="M9 13h6M9 16h6" stroke-linecap="round"></path></svg>', 'Résumé', 'maya-chen-resume.pdf', connectedBtn('Uploaded'))}
+        ${row('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3F3A35" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 7l9 6 9-6" stroke-linecap="round" stroke-linejoin="round"></path></svg>', 'Google', 'Calendar + email confirmations', connectBtn)}
+      </div>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-top:28px;">
+        <button class="btn-ghost" onclick="App.go('auth')">Back</button>
+        <button class="btn btn-primary" onclick="App.go('basics')">Continue</button>
+      </div>
+    </div>
+  </div>`;
 }
 
-function navTo(screen) { goTo(screen); }
-
-function skipToFeed() {
-  voiceSkipped = true;
-  document.getElementById('app-shell').classList.remove('hidden');
-  goTo('discover');
-  document.getElementById('degraded-hint').classList.remove('hidden');
+function renderBasics() {
+  const f = (label, value, dashed) => `<div${dashed?' style="grid-column:1 / -1;"':''}><label class="label">${label}</label><input class="input${dashed?' input-dashed':''}" style="border-radius:10px; padding:11px 12px;" ${value?`value="${value}"`:`placeholder="Add skills (e.g. React, embedded, design)…"`}></div>`;
+  return `<div class="page">
+    <div class="card" style="width:520px; padding:38px 40px; box-shadow:0 2px 10px rgba(0,0,0,.04); border-radius:20px;">
+      <div class="eyebrow">STEP 2 OF 3 · PROFILE BASICS</div>
+      <div style="font-weight:700; font-size:24px; letter-spacing:-0.01em; margin-top:12px;">Fill once — EarlyBirds reuses these on every form.</div>
+      <div style="display:flex; align-items:center; gap:12px; margin-top:18px;">
+        <div style="flex:1; height:6px; background:#EFEBE5; border-radius:999px; overflow:hidden;"><div style="width:80%; height:100%; background:var(--teal); border-radius:999px;"></div></div>
+        <span class="mono" style="font-size:12.5px; color:var(--muted);">4 of 5 fields</span>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:24px;">
+        ${f('Full name','Maya Chen')}
+        ${f('Email','maya.chen@berkeley.edu')}
+        ${f('School','UC Berkeley')}
+        ${f('GitHub','github.com/mayac')}
+        ${f('Skills','',true)}
+      </div>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-top:28px;">
+        <button class="btn-ghost" onclick="App.go('feed')">Skip for now</button>
+        <button class="btn btn-primary" onclick="App.go('voice')">Continue</button>
+      </div>
+    </div>
+  </div>`;
 }
 
-function finishVoice() {
-  voiceSkipped = false;
-  document.getElementById('app-shell').classList.remove('hidden');
-  goTo('discover');
+function renderVoice() {
+  const chips = INTERESTS.map(t => `<button class="interest-chip${state.interests.includes(t)?' active':''}" onclick="App.toggleInterest('${t}')">${t}</button>`).join('');
+  const card = (inner) => `<div class="card" style="border-radius:18px; padding:26px 28px;">${inner}</div>`;
+  return `<div style="height:100vh; background:var(--bg); overflow:auto;">
+    <div style="width:580px; max-width:100%; margin:0 auto; padding:40px 24px 120px;">
+      <div class="eyebrow">STEP 3 OF 3 · YOUR VOICE</div>
+      <div style="font-weight:700; font-size:26px; letter-spacing:-0.015em; margin-top:12px;">Tell us how you think.</div>
+      <div style="font-size:14.5px; color:var(--muted); margin-top:8px; line-height:1.5;">A few quick prompts. The agent learns your <em>voice</em> from these — your interests steer matches, never your past topics. All optional.</div>
+      <div style="display:flex; flex-direction:column; gap:16px; margin-top:28px;">
+        ${card(`<div style="font-weight:600; font-size:18px; letter-spacing:-0.01em;">What do you want to hack on next?</div>
+          <div style="font-size:13.5px; color:var(--muted); margin-top:6px;">Pick what excites you — not just what you've done before.</div>
+          <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:18px;">${chips}</div>`)}
+        ${card(`<div style="font-weight:600; font-size:18px; letter-spacing:-0.01em;">One line about you.</div>
+          <div style="font-size:13.5px; color:var(--muted); margin-top:6px;">How you'd introduce yourself to a team.</div>
+          <input class="input" style="margin-top:18px; font-size:15px;" value="CS junior who likes shipping playful, polished products fast.">`)}
+        ${card(`<div style="font-weight:600; font-size:18px; letter-spacing:-0.01em;">Something you've built that represents how you work.</div>
+          <div style="font-size:13.5px; color:var(--muted); margin-top:6px;">We learn your voice from this — not your topic.</div>
+          <textarea class="input" style="margin-top:18px; min-height:92px; resize:vertical; line-height:1.55;">A 4-player co-op puzzle game built in a weekend with Godot — shipped to 3k plays, learned to cut scope ruthlessly.</textarea>`)}
+        ${card(`<div style="display:flex; align-items:center; gap:9px;"><div style="font-weight:600; font-size:18px; letter-spacing:-0.01em;">What would you try outside your usual lane?</div><span class="mono" style="font-size:11px; color:var(--faint2);">optional</span></div>
+          <div style="font-size:13.5px; color:var(--muted); margin-top:6px;">Helps us surface stretch matches.</div>
+          <input class="input input-dashed" style="margin-top:18px; font-size:15px;" placeholder="e.g. fintech, climate, devtools…">`)}
+        <div class="card" style="border:1px solid var(--teal-border); border-radius:18px; padding:26px 28px; box-shadow:0 1px 0 var(--teal-tint2);">
+          <div style="display:flex; align-items:center; gap:9px;">
+            <div style="font-weight:600; font-size:18px; letter-spacing:-0.01em;">Paste an essay or write-up you're proud of</div>
+            <span class="mono" style="display:inline-flex; align-items:center; gap:5px; font-size:11px; color:var(--teal-fill); font-weight:600; background:var(--teal-tint2); padding:2px 8px; border-radius:999px;"><span style="width:5px;height:5px;border-radius:50%;background:var(--teal);"></span>best signal</span>
+          </div>
+          <div style="font-size:13.5px; color:var(--muted); margin-top:6px; line-height:1.5;">This is the strongest way to capture your voice — a personal statement, blog post, or project README in your own words. The more you paste, the better the agent sounds like you.</div>
+          <textarea class="input" style="margin-top:18px; border:1px solid var(--teal-border); background:#FBFCFB; min-height:150px; resize:vertical; line-height:1.6;" placeholder="Paste a personal statement, blog post, essay, or detailed README…"></textarea>
+          <div class="mono" style="font-size:11.5px; color:#A39E97; margin-top:8px;">0 words · aim for 150+</div>
+        </div>
+      </div>
+    </div>
+    <div style="position:fixed; bottom:0; left:0; right:0; background:rgba(246,244,241,0.92); border-top:1px solid #E5E0D9; backdrop-filter:blur(6px);">
+      <div style="width:580px; max-width:100%; margin:0 auto; padding:16px 24px; display:flex; align-items:center; justify-content:space-between;">
+        <button class="btn-ghost" onclick="App.go('basics')">Back</button>
+        <div style="display:flex; align-items:center; gap:18px;">
+          <button class="btn-ghost" onclick="App.go('feed')">Skip voice step</button>
+          <button class="btn btn-primary" onclick="App.go('feed')">Save &amp; find hackathons</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
 }
 
-function toggleTag(el) { el.classList.toggle('selected'); }
-
-function nextVoiceCard(n) {
-  document.getElementById('voice-card-' + voiceCard).classList.add('hidden');
-  voiceCard = n;
-  document.getElementById('voice-card-' + voiceCard).classList.remove('hidden');
-  document.querySelectorAll('#voice-dots .dot').forEach((d, i) => {
-    d.classList.toggle('active', i === voiceCard);
-    d.classList.toggle('done', i < voiceCard);
-  });
+/* ============================== APP SHELL ============================== */
+function navBtn(id, icon, label, routes) {
+  const active = routes.includes(state.route);
+  return `<button class="nav-item${active?' active':''}" onclick="App.go('${id}')">${icon}${label}</button>`;
+}
+function renderApp(inner) {
+  return `<div class="shell">
+    <aside class="sidebar">
+      <div class="brand">${bird(24)}<span>EarlyBirds</span></div>
+      <nav class="nav">
+        ${navBtn('feed', ICONS.discover, 'Discover', ['feed','event'])}
+        ${navBtn('saved', ICONS.saved, 'Saved', ['saved'])}
+        ${navBtn('registrations', ICONS.regs, 'Registrations', ['registrations'])}
+        ${navBtn('notifications', ICONS.notif, 'Notifications', ['notifications'])}
+        ${navBtn('profile', ICONS.profile, 'Profile', ['profile'])}
+        ${navBtn('settings', ICONS.settings, 'Settings', ['settings'])}
+      </nav>
+      <div class="user-chip">
+        <div class="avatar">MC</div>
+        <div style="flex:1; min-width:0;"><div style="font-size:13.5px; font-weight:600;">Maya Chen</div><div style="font-size:12px; color:var(--faint2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">maya.chen@berkeley.edu</div></div>
+      </div>
+    </aside>
+    <div class="main" id="eb-main">${inner}</div>
+  </div>`;
 }
 
-function renderEventCard(e, listId) {
-  return `<div class="event-card" onclick="showEventDetail('${e.id}')">
-    <div class="event-card-top"><div><h3>${e.title}</h3><div class="event-meta">${e.location} · <span class="mono">${e.deadline}</span></div>
-    <div class="event-badges">${e.viaExa ? '<span class="badge badge-exa">Via Exa</span>' : ''}${e.merged ? `<span class="badge badge-merged">Merged from ${e.merged} sources</span>` : ''}</div>
-    ${e.stretch ? `<div class="stretch-reason">${e.stretchReason}</div>` : ''}</div>
-    <button class="save-toggle ${e.saved ? 'saved' : ''}" onclick="event.stopPropagation();toggleSave('${e.id}')">${e.saved ? 'Saved' : 'Save'}</button></div>
-    <div class="event-card-actions"><button class="btn btn-primary btn-sm" onclick="event.stopPropagation();startRegister('${e.id}')">Register</button></div></div>`;
+function eventCard(e) {
+  const badges = `<div style="display:flex; gap:7px; margin-bottom:9px;">${e.viaExa?`<span class="pill-exa"><span class="dot"></span>Via Exa</span>`:''}${e.merged?`<span class="pill-merged">Merged from 3 sources</span>`:''}</div>`;
+  const bm = `<button onclick="event.stopPropagation();App.toggleSave('${e.id}')" style="background:none; border:1px solid var(--input); border-radius:9px; width:34px; height:34px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;">${state.saved[e.id]?ICONS.bookmarkOn:ICONS.bookmarkOff}</button>`;
+  return `<div class="card" style="padding:20px 22px;">
+    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:14px;">
+      <div style="flex:1; min-width:0;">
+        ${(e.viaExa||e.merged)?badges:''}
+        <div onclick="App.openEvent('${e.id}')" style="font-weight:600; font-size:19px; letter-spacing:-0.01em; cursor:pointer;">${e.title}</div>
+        <div style="font-size:13.5px; color:var(--muted); margin-top:4px;">${e.place} · ${e.dates}</div>
+        <div class="mono" style="font-size:12.5px; color:var(--faint); margin-top:6px;">${e.short}</div>
+        <div style="font-size:14px; color:var(--muted); margin-top:9px; line-height:1.5;">${e.reason}</div>
+      </div>
+      ${bm}
+    </div>
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-top:16px;">
+      <button onclick="App.openEvent('${e.id}')" style="background:none; border:none; color:var(--faint); font-size:13.5px; font-weight:500; cursor:pointer; padding:0;">View details →</button>
+      <button class="btn btn-outline" onclick="App.startAutofill('${e.id}')">Auto-register</button>
+    </div>
+  </div>`;
 }
 
-function renderEvents() {
-  document.getElementById('event-list').innerHTML = EVENTS.map(e => renderEventCard(e, 'event-list')).join('');
+function renderFeed() {
+  let feed = EVENTS.slice();
+  if (state.feedFilter==='closing') feed = feed.filter(e=>e.closingSoon);
+  if (state.feedFilter==='remote') feed = feed.filter(e=>e.remote);
+  if (state.feedFilter==='exa') feed = feed.filter(e=>e.viaExa);
+  const chip = (f, label) => `<button class="filter-chip${state.feedFilter===f?' active':''}" onclick="App.setFeedFilter('${f}')">${label}</button>`;
+  return renderApp(`<div class="wrap">
+    <h1 class="page-title">Discover</h1>
+    <div class="page-sub">Ranked by fit to your profile. The agent can register you for any of these.</div>
+    <div style="position:relative; margin-top:22px;">${ICONS.search}<input class="input" style="background:#fff; border-radius:12px; padding:12px 14px 12px 40px;" placeholder="Search events, locations, tracks…"></div>
+    <div style="display:flex; gap:9px; margin-top:14px; flex-wrap:wrap;">${chip('all','All')}${chip('closing','Closing soon')}${chip('remote','Remote')}${chip('exa','Via Exa')}</div>
+    <div style="display:flex; flex-direction:column; gap:14px; margin-top:22px;">${feed.map(eventCard).join('')}</div>
+  </div>`);
 }
 
 function renderSaved() {
-  const saved = EVENTS.filter(e => e.saved);
-  document.getElementById('saved-list').innerHTML = saved.length ? saved.map(e => renderEventCard(e)).join('') : '<div class="empty-state"><h3>No saved events</h3><p>Bookmark events from Discover to track them here.</p></div>';
+  const saved = EVENTS.filter(e => state.saved[e.id]);
+  const row = (e) => `<div class="card" style="padding:20px 22px; display:flex; align-items:center; justify-content:space-between; gap:14px;">
+    <div style="flex:1; min-width:0;">
+      <div onclick="App.openEvent('${e.id}')" style="font-weight:600; font-size:18px; letter-spacing:-0.01em; cursor:pointer;">${e.title}</div>
+      <div style="font-size:13.5px; color:var(--muted); margin-top:4px;">${e.place} · ${e.dates}</div>
+      <div class="mono" style="font-size:12.5px; color:var(--faint); margin-top:6px;">${e.short}</div>
+    </div>
+    <div style="display:flex; gap:10px; align-items:center;">
+      <button onclick="App.toggleSave('${e.id}')" style="background:none; border:1px solid var(--input); border-radius:9px; width:34px; height:34px; display:flex; align-items:center; justify-content:center; cursor:pointer;">${ICONS.bookmarkOn}</button>
+      <button class="btn btn-outline" onclick="App.startAutofill('${e.id}')">Auto-register</button>
+    </div>
+  </div>`;
+  return renderApp(`<div class="wrap">
+    <h1 class="page-title">Saved</h1>
+    <div class="page-sub">Events you've bookmarked to revisit or register later.</div>
+    ${saved.length ? `<div style="display:flex; flex-direction:column; gap:14px; margin-top:22px;">${saved.map(row).join('')}</div>`
+      : `<div style="text-align:center; padding:60px 20px; color:var(--muted); margin-top:22px;"><div style="font-weight:600; color:var(--text); margin-bottom:6px;">No saved events</div>Bookmark events from Discover to track them here.</div>`}
+  </div>`);
 }
 
-function toggleSave(id) {
-  const e = EVENTS.find(x => x.id === id);
-  if (e) { e.saved = !e.saved; renderEvents(); renderSaved(); }
+function renderEvent() {
+  const e = currentSel();
+  return renderApp(`<div class="wrap wrap-event">
+    <button onclick="App.go('feed')" style="background:none; border:none; color:var(--faint); font-size:13.5px; cursor:pointer; padding:0; margin-bottom:18px;">← Back to discover</button>
+    <div class="card" style="border-radius:18px; overflow:hidden;">
+      <div style="padding:28px 30px;">
+        ${e.viaExa?`<span class="pill-exa"><span class="dot"></span>Via Exa</span>`:''}
+        <div style="font-weight:700; font-size:28px; letter-spacing:-0.02em; margin:14px 0 6px;">${e.title}</div>
+        <div style="font-size:14.5px; color:var(--muted);">${e.place} · ${e.dates}</div>
+        <div class="mono" style="font-size:14px; color:var(--faint); margin-top:8px;">${e.short}</div>
+        <button class="btn btn-primary" style="margin-top:18px; padding:13px 28px;" onclick="App.startAutofill('${e.id}')">Auto-register me</button>
+        <div class="section-label" style="margin:26px 0 11px;">WHY YOU'RE A MATCH</div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px;">${e.reasons.map(r=>`<span class="reason-pill">${r}</span>`).join('')}</div>
+      </div>
+      <div style="margin:0 30px 30px; border:1px solid var(--border); border-radius:14px; overflow:hidden;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 16px; background:var(--panel); border-bottom:1px solid #EFEBE5;">
+          <span style="font-weight:600; font-size:14.5px;">How we found this</span>
+          ${e.merged?`<span class="pill-merged" style="font-size:10.5px;">Merged from 3 sources</span>`:''}
+        </div>
+        <div style="padding:16px;">
+          <div style="font-size:11.5px; color:var(--faint); margin-bottom:5px;">Query</div>
+          <div class="mono" style="font-size:12px; color:var(--text); background:#F6F4F0; border:1px solid #EDE9E3; border-radius:8px; padding:9px 11px; line-height:1.5;">${e.query}</div>
+          <div style="display:flex; flex-direction:column; gap:12px; margin-top:14px;">
+            ${e.sources.map(s=>`<div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px;">
+              <span style="font-size:13px; font-weight:500; min-width:84px;">${s.label}</span>
+              <span class="mono" style="font-size:11.5px; color:var(--teal-fill); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.url}</span>
+              <span class="mono" style="font-size:11.5px; color:var(--faint);">${s.conf}</span>
+            </div>`).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`);
 }
 
-function showEventDetail(id) {
-  const e = EVENTS.find(x => x.id === id);
-  if (!e) return;
-  document.getElementById('event-detail-content').innerHTML = `
-    <div class="detail-hero"><h1>${e.title}</h1><div class="event-meta">${e.location}</div>
-    <div class="countdown">Registration closes in <span class="mono">${e.deadline}</span></div>
-    <div class="event-badges">${e.viaExa ? '<span class="badge badge-exa">Via Exa</span>' : ''}${e.merged ? `<span class="badge badge-merged">Merged from ${e.merged} sources</span>` : ''}</div></div>
-    <div class="match-pills">${e.reasons.map(r => `<span class="pill">${r}</span>`).join('')}${e.stretch ? `<span class="pill pill-stretch">${e.stretchReason}</span>` : ''}</div>
-    <div class="exa-drawer"><div class="exa-drawer-header">How we found this <span>−</span></div>
-    <div class="exa-drawer-body"><div style="font-size:13px;color:var(--muted);margin-bottom:8px">Exa query</div>
-    <div class="exa-query">${e.exaQuery || 'N/A'}</div>${e.citations.map(c => `<div class="citation"><span class="citation-label">${c.field}</span><span class="citation-url">${c.url}</span></div>`).join('')}</div></div>
-    <div style="display:flex;gap:12px"><button class="btn btn-primary" onclick="startRegister('${e.id}')">Register</button>
-    <button class="btn btn-outline" onclick="toggleSave('${e.id}')">${e.saved ? 'Unsave' : 'Save'}</button></div>`;
-  goTo('event-detail');
-}
-
-function startRegister(id) { openAutofill('filling'); }
-
-const STATUS_LABELS = {
-  awaiting_approval: ['Awaiting approval', 'status-awaiting'],
-  needs_input: ['Needs your input', 'status-needs'],
-  captcha_encountered: ['Paused — action needed', 'status-paused'],
-  oauth_redirect: ['Paused — action needed', 'status-paused'],
-  succeeded: ['Registered', 'status-success'],
-  failed: ['Failed', 'status-failed'],
-  filling: ['Filling', 'status-filling'],
-  submitting: ['Submitting', 'status-filling']
-};
-
-function renderRegistrations(filter) {
-  let regs = REGISTRATIONS;
-  if (filter === 'active') regs = regs.filter(r => ['filling','submitting'].includes(r.status));
-  if (filter === 'needs') regs = regs.filter(r => ['awaiting_approval','needs_input','captcha_encountered','oauth_redirect'].includes(r.status));
-  if (filter === 'done') regs = regs.filter(r => r.status === 'succeeded');
-  document.getElementById('reg-list').innerHTML = regs.map(r => {
-    const [label, cls] = STATUS_LABELS[r.status] || [r.status, 'status-filling'];
-    return `<div class="reg-row"><div class="reg-info"><h4>${r.event}</h4><p>${r.time}</p></div>
-    <div style="display:flex;align-items:center;gap:12px"><span class="status-pill-row ${cls}">${label}</span>
-    <button class="btn btn-outline btn-sm" onclick="openAutofill('${r.status}')">Open</button></div></div>`;
-  }).join('');
-}
-
-function filterRegs(f, el) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  el.classList.add('active');
-  renderRegistrations(f);
+function renderRegistrations() {
+  const actionFor = (row) => ({
+    awaiting:{label:'Review',primary:true,step:'awaiting'},
+    needsinput:{label:'Answer',primary:true,step:'needsinput'},
+    failed:{label:'Retry',primary:true,step:'failed'},
+    paused:{label:'Resume',primary:true,step:'captcha'},
+    filling:{label:'View',primary:false,step:'filling'},
+    registered:{label:'View',primary:false,step:null},
+  }[row.status]);
+  let rows = REGS_RAW;
+  if (state.regFilter==='active') rows = rows.filter(r=>['filling','awaiting','needsinput'].includes(r.status));
+  if (state.regFilter==='registered') rows = rows.filter(r=>r.status==='registered');
+  if (state.regFilter==='needsyou') rows = rows.filter(r=>['awaiting','needsinput','failed','paused'].includes(r.status));
+  const tab = (f,label) => `<button onclick="App.setRegFilter('${f}')" style="padding:8px 4px; border:none; border-bottom:2px solid ${state.regFilter===f?'var(--teal-fill)':'transparent'}; background:none; color:${state.regFilter===f?'var(--text)':'var(--faint)'}; font-size:14px; font-weight:${state.regFilter===f?'600':'500'}; cursor:pointer;">${label}</button>`;
+  const rowHtml = (r) => {
+    const m = REG_META[r.status]; const a = actionFor(r);
+    const act = a.step
+      ? `<button onclick="App.openAutofillAt('${r.id}','${a.step}')" class="btn ${a.primary?'btn-primary':'btn-neutral'} btn-sm" ${a.primary?'style="padding:7px 16px;"':''}>${a.label}</button>`
+      : `<button class="btn btn-neutral btn-sm">${a.label}</button>`;
+    return `<div class="card" style="border-radius:14px; padding:16px 20px; display:flex; align-items:center; gap:16px;">
+      <div style="flex:1; min-width:0;"><div style="font-weight:600; font-size:16px;">${r.title}</div><div style="font-size:13px; color:var(--faint); margin-top:3px;">${r.place}</div></div>
+      <div class="mono" style="font-size:12.5px; color:var(--faint); width:90px; text-align:right;">${r.deadline}</div>
+      <div style="width:170px;"><span style="display:inline-flex; align-items:center; gap:6px; padding:4px 11px; border-radius:999px; font-size:12.5px; font-weight:600; background:${m.bg}; color:${m.color};"><span style="width:6px; height:6px; border-radius:50%; background:${m.dot};"></span>${m.label}</span></div>
+      ${act}
+    </div>`;
+  };
+  return renderApp(`<div class="wrap">
+    <h1 class="page-title">Registrations</h1>
+    <div class="page-sub">Everything the agent is working on, and what still needs you.</div>
+    <div style="display:flex; gap:22px; margin-top:20px; border-bottom:1px solid var(--border);">${tab('all','All')}${tab('active','Active')}${tab('needsyou','Needs you')}${tab('registered','Registered')}</div>
+    <div style="display:flex; flex-direction:column; gap:12px; margin-top:20px;">${rows.map(rowHtml).join('')}</div>
+  </div>`);
 }
 
 function renderNotifications() {
-  document.getElementById('notif-list').innerHTML = NOTIFICATIONS.map((n, i) => `
-    <div class="notif-item" onclick="handleNotif(${i})">
-    <div class="notif-dot ${n.unread ? '' : 'read'}"></div>
-    <div class="notif-body"><h4>${n.title}</h4><p>${n.body}</p></div>
-    <span class="notif-time">${n.time}</span></div>`).join('');
+  const item = (n) => `<div style="display:flex; gap:13px; padding:16px 20px; border-bottom:1px solid #F2EFEA;">
+    <span style="width:9px; height:9px; border-radius:50%; margin-top:6px; flex-shrink:0; background:${NOTIF_COLOR[n.type]};"></span>
+    <div style="flex:1;"><div style="font-size:14px; line-height:1.45;">${n.text}</div><div class="mono" style="font-size:11.5px; color:#A39E97; margin-top:4px;">${n.time}</div></div>
+  </div>`;
+  return renderApp(`<div class="wrap wrap-narrow">
+    <h1 class="page-title">Notifications</h1>
+    <div class="page-sub">Activity from your agent.</div>
+    <div class="card" style="margin-top:22px; overflow:hidden;">${NOTIFS.map(item).join('')}</div>
+  </div>`);
 }
 
-function handleNotif(i) { if (NOTIFICATIONS[i].action) NOTIFICATIONS[i].action(); }
-
-function clearAutoTimers() { autoTimers.forEach(t => clearTimeout(t)); autoTimers = []; }
-
-function openAutofill(state, fromDebug) {
-  manualOverride = !!fromDebug;
-  autofillState = state;
-  document.getElementById('autofill').classList.add('active');
-  document.getElementById('autofill-main').classList.remove('hidden');
-  document.getElementById('autofill-success').classList.add('hidden');
-  document.getElementById('autofill-failed').classList.add('hidden');
-  filledCount = 0;
-  fieldStates = {};
-  AUTOFILL_FIELDS.forEach(f => fieldStates[f.key] = { filled: false, value: '' });
-  clearAutoTimers();
-  document.getElementById('af-confirm-btn').textContent = 'Confirm & submit';
-  initAgentLog();
-  applyAutofillState(state);
-  if (state === 'filling' && !fromDebug) startAutoAdvance();
-  updateDebug();
+function renderProfile() {
+  const basic = (l,v) => `<div><div style="font-size:12.5px; color:var(--faint); margin-bottom:5px;">${l}</div><div style="font-size:15px; font-weight:500;">${v}</div></div>`;
+  const interests = state.interests.map(t=>`<span class="reason-pill">${t}</span>`).join('');
+  const sample = (name,meta) => `<div style="display:flex; align-items:center; justify-content:space-between; border:1px solid #EFEBE5; border-radius:11px; padding:13px 15px; background:var(--panel);">
+    <div><div style="font-size:14px; font-weight:500;">${name}</div><div class="mono" style="font-size:11.5px; color:#A39E97; margin-top:3px;">${meta}</div></div>
+    <button class="btn-ghost" style="font-size:13px;">View</button></div>`;
+  return renderApp(`<div class="wrap wrap-narrow">
+    <h1 class="page-title">Profile</h1>
+    <div class="page-sub">Fill once — EarlyBirds reuses these on every form.</div>
+    <div class="card" style="padding:24px; margin-top:22px;">
+      <div class="section-label" style="margin-bottom:16px;">BASICS</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">${basic('Full name','Maya Chen')}${basic('Email','maya.chen@berkeley.edu')}${basic('School','UC Berkeley')}${basic('Graduation','2027')}</div>
+    </div>
+    <div class="card" style="padding:24px; margin-top:16px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;"><div class="section-label">YOUR VOICE</div><button class="btn-ghost" style="color:var(--teal-fill); font-weight:600; font-size:13px;">Edit</button></div>
+      <div style="font-size:13px; color:var(--muted); margin-bottom:16px; line-height:1.5;">The agent writes open-ended answers in <em>your voice</em> — your interests steer matches, not your past topics.</div>
+      <div style="font-size:12px; color:var(--faint); margin-bottom:8px;">Interests</div>
+      <div style="display:flex; flex-wrap:wrap; gap:8px;">${interests}</div>
+      <div style="font-size:12px; color:var(--faint); margin:18px 0 6px;">One-liner</div>
+      <div style="font-size:14px; line-height:1.5;">CS junior who likes shipping playful, polished products fast.</div>
+      <div style="font-size:12px; color:var(--faint); margin:18px 0 6px;">Proud project</div>
+      <div style="font-size:14px; line-height:1.5;">A 4-player co-op puzzle game built in a weekend with Godot — 3k plays.</div>
+      <div style="font-size:12px; color:var(--faint); margin:18px 0 6px;">Outside my lane</div>
+      <div style="font-size:14px; line-height:1.5;">Curious about fintech &amp; payments.</div>
+    </div>
+    <div class="card" style="padding:24px; margin-top:16px;">
+      <div class="section-label" style="margin-bottom:12px;">WRITING SAMPLES</div>
+      <div style="font-size:13px; color:var(--muted); margin-bottom:14px; line-height:1.5;">Samples the agent learns your tone from — for voice, never to dictate topic.</div>
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        ${sample('Devpost project README','312 words · pasted')}
+        ${sample('Scholarship essay','488 words · pasted')}
+        <button class="input input-dashed" style="text-align:center; color:var(--teal-fill); font-weight:600; cursor:pointer; padding:12px; font-size:13.5px;">+ Add writing sample</button>
+      </div>
+    </div>
+  </div>`);
 }
 
-function closeAutofill() {
-  document.getElementById('autofill').classList.remove('active');
-  autofillState = 'idle';
-  clearAutoTimers();
-  updateDebug();
+function renderSettings() {
+  const settingRow = (x) => {
+    const on = state.settings[x.key];
+    return `<div style="display:flex; align-items:center; gap:18px; padding:16px 0; border-top:1px solid #F2EFEA;">
+      <div style="flex:1;"><div style="font-size:14.5px; font-weight:500;">${x.label}</div><div style="font-size:13px; color:var(--faint); margin-top:3px; line-height:1.45;">${x.desc}</div></div>
+      <button class="toggle-track" style="background:${on?'var(--teal-fill)':'#D8D3CC'};" onclick="App.toggleSetting('${x.key}')"><span class="toggle-knob" style="transform:translateX(${on?'18px':'0px'});"></span></button>
+    </div>`;
+  };
+  const connRow = (x) => {
+    const on = state.connected[x.key];
+    return `<div style="display:flex; align-items:center; gap:18px; padding:16px 0; border-top:1px solid #F2EFEA;">
+      <div style="flex:1;"><div style="font-size:14.5px; font-weight:500;">${x.name}</div><div style="font-size:13px; color:var(--faint); margin-top:3px;">${x.detail}</div></div>
+      <button onclick="App.toggleConnected('${x.key}')" style="${on?'background:var(--teal-tint2); color:var(--teal-fill); border:1px solid var(--teal-border);':'background:var(--teal-fill); color:#fff; border:none;'} padding:7px 15px; border-radius:9px; font-size:13px; font-weight:600; cursor:pointer;">${on?'Connected':'Connect'}</button>
+    </div>`;
+  };
+  return renderApp(`<div class="wrap wrap-narrow">
+    <h1 class="page-title">Settings</h1>
+    <div class="page-sub">Control how the agent works on your behalf.</div>
+    <div class="card" style="padding:8px 24px; margin-top:22px;">
+      <div class="section-label" style="padding:18px 0 4px;">AUTOFILL PREFERENCES</div>
+      ${SETTING_DEFS.map(settingRow).join('')}
+    </div>
+    <div class="card" style="padding:8px 24px; margin-top:16px;">
+      <div class="section-label" style="padding:18px 0 4px;">CONNECTED ACCOUNTS</div>
+      ${CONN_DEFS.map(connRow).join('')}
+    </div>
+    <div class="card" style="padding:8px 24px; margin-top:16px;">
+      <div class="section-label" style="padding:18px 0 4px;">PRIVACY &amp; DATA</div>
+      <div style="display:flex; align-items:center; gap:18px; padding:16px 0; border-top:1px solid #F2EFEA;">
+        <div style="flex:1;"><div style="font-size:14.5px; font-weight:500;">Download my data</div><div style="font-size:13px; color:var(--faint); margin-top:3px;">Export everything EarlyBirds stores about you.</div></div>
+        <button class="btn btn-neutral btn-sm">Export</button>
+      </div>
+      <div style="display:flex; align-items:center; gap:18px; padding:16px 0; border-top:1px solid #F2EFEA;">
+        <div style="flex:1;"><div style="font-size:14.5px; font-weight:500; color:var(--red-text);">Delete account</div><div style="font-size:13px; color:var(--faint); margin-top:3px;">Permanently remove your profile and history.</div></div>
+        <button style="background:none; border:1px solid #E7CEC8; color:var(--red-text); padding:7px 15px; border-radius:9px; font-size:13px; font-weight:500; cursor:pointer;">Delete</button>
+      </div>
+    </div>
+  </div>`);
 }
 
-function startAutoAdvance() {
-  let t = 600;
-  AUTOFILL_FIELDS.filter(f => f.key !== 'team_status').forEach((f, i) => {
-    autoTimers.push(setTimeout(() => {
-      if (manualOverride || autofillState !== 'filling') return;
-      fillField(f.key);
-    }, t));
-    t += 900 + i * 100;
-  });
-  autoTimers.push(setTimeout(() => {
-    if (manualOverride || autofillState !== 'filling') return;
-    applyAutofillState('needs_input');
-    autoTimers.push(setTimeout(() => {
-      if (manualOverride || autofillState !== 'needs_input') return;
-      fieldStates.team_status.filled = true;
-      fieldStates.team_status.value = 'Looking for teammates';
-      addLog('filled · Team status (llm_inferred)', false);
-      applyAutofillState('awaiting_approval');
-    }, 4000));
-  }, t + 400));
+/* ============================== AUTOFILL TAKEOVER ============================== */
+function fieldDefs() {
+  const draftVal = state.draftText != null ? state.draftText : (currentSel().draft || DRAFT_FIN);
+  return [
+    { key:'name', label:'Full name', value:'Maya Chen', source:'profile' },
+    { key:'email', label:'Email', value:'maya.chen@berkeley.edu', source:'profile' },
+    { key:'school', label:'School', value:'UC Berkeley', source:'profile' },
+    { key:'github', label:'GitHub', value:'github.com/mayac', source:'profile' },
+    { key:'grad', label:'Graduation year', value:'2027', source:'profile' },
+    { key:'tshirt', label:'T-shirt size', value:'M', source:'default' },
+    { key:'team', label:'Team status', value:'Looking for teammates', source:'llm_inferred', wide:true },
+    { key:'why', label:'Why do you want to join?', value:draftVal, source:'llm_draft', wide:true },
+  ];
 }
-
-function setAutofillState(state) { applyAutofillState(state); updateDebug(); }
-
-function applyAutofillState(state) {
-  autofillState = state;
-
-  document.getElementById('autofill-main').classList.toggle('hidden', ['succeeded','failed'].includes(state));
-  document.getElementById('autofill-success').classList.toggle('hidden', state !== 'succeeded');
-  document.getElementById('autofill-failed').classList.toggle('hidden', state !== 'failed');
-
-  const pill = document.getElementById('af-status-pill');
-  const pauseBanner = document.getElementById('af-pause-banner');
-  const needsInput = document.getElementById('af-needs-input');
-  const confirmBtn = document.getElementById('af-confirm-btn');
-  const resumeBtn = document.getElementById('af-resume-btn');
-  const footerNote = document.getElementById('af-footer-note');
-  const afBody = document.getElementById('af-body');
-  const afFooter = document.getElementById('af-footer');
-
-  pauseBanner.classList.add('hidden');
-  needsInput.classList.add('hidden');
-  resumeBtn.classList.add('hidden');
-  afBody.classList.remove('hidden');
-  afFooter.classList.remove('hidden');
-
-  if (state === 'filling') {
-    pill.textContent = 'auto-registering';
-    pill.className = 'status-pill';
-    confirmBtn.disabled = true;
-    confirmBtn.classList.add('locked');
-    footerNote.className = 'footer-note';
-    footerNote.innerHTML = 'Nothing is submitted until you confirm';
-    if (filledCount === 0 && !document.getElementById('af-agent-log').children.length) initAgentLog();
-    renderAutofillFields();
-  } else if (state === 'needs_input') {
-    prefillProfileFields();
-    pill.textContent = 'needs input';
-    pill.className = 'status-pill paused';
-    needsInput.classList.remove('hidden');
-    needsInput.innerHTML = `<p style="margin-bottom:12px">This form asks for <strong>Team status</strong> — we don't have it yet.</p>
-    <div class="field"><input type="text" id="team-status-input" placeholder="e.g. Looking for teammates" value="Looking for teammates"></div>
-    <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="provideTeamStatus()">Provide & resume</button>`;
-    addLog('paused · needs_input: team_status', true);
-    confirmBtn.disabled = true;
-    confirmBtn.classList.add('locked');
-    renderAutofillFields();
-  } else if (state === 'captcha_encountered') {
-    prefillAllFields();
-    pill.textContent = 'paused';
-    pill.className = 'status-pill paused';
-    pauseBanner.classList.remove('hidden');
-    pauseBanner.textContent = 'Complete the CAPTCHA in your browser, then click Resume.';
-    resumeBtn.classList.remove('hidden');
-    confirmBtn.disabled = true;
-    addLog('paused · captcha_encountered', true);
-    renderAutofillFields(true);
-  } else if (state === 'oauth_redirect') {
-    prefillAllFields();
-    pill.textContent = 'paused';
-    pill.className = 'status-pill paused';
-    pauseBanner.classList.remove('hidden');
-    pauseBanner.textContent = 'Sign in to Google in your browser, then click Resume.';
-    resumeBtn.classList.remove('hidden');
-    confirmBtn.disabled = true;
-    addLog('paused · oauth_redirect: Google', true);
-    renderAutofillFields(true);
-  } else if (state === 'awaiting_approval') {
-    pill.textContent = 'ready for review';
-    pill.className = 'status-pill';
-    AUTOFILL_FIELDS.forEach(f => {
-      fieldStates[f.key].filled = true;
-      fieldStates[f.key].value = f.inferredValue || f.draftText || f.value;
-    });
-    confirmBtn.disabled = false;
-    confirmBtn.classList.remove('locked');
-    footerNote.className = 'footer-note ready';
-    footerNote.innerHTML = 'Ready — review, then confirm';
-    addLog('awaiting_approval · all fields filled', true);
-    renderAutofillFields(true);
-  } else if (state === 'submitting') {
-    pill.textContent = 'submitting';
-    confirmBtn.disabled = true;
-    confirmBtn.textContent = 'Submitting...';
-    addLog('submitting form...', true);
-    autoTimers.push(setTimeout(() => setAutofillState('succeeded'), 2000));
-    renderAutofillFields(true);
-  } else if (state === 'succeeded' || state === 'failed') {
-    afBody.classList.add('hidden');
-    afFooter.classList.add('hidden');
+function stateOf(key, af) {
+  if (af==='filling' || af==='captcha' || af==='oauth') { if (key==='team') return 'active'; if (key==='why') return 'pending'; return 'done'; }
+  if (af==='needsinput') { if (key==='team'||key==='why') return 'pending'; return 'done'; }
+  return 'done';
+}
+function renderField(f, af) {
+  const st = stateOf(f.key, af);
+  const isDraft = f.source==='llm_draft', isInf = f.source==='llm_inferred';
+  const cell = f.wide ? ' style="grid-column:1 / -1;"' : '';
+  const labelStyle = st==='active'
+    ? 'font-size:12.5px; color:var(--teal-fill); font-weight:600; display:block; margin-bottom:7px;'
+    : 'font-size:12.5px; color:var(--muted); font-weight:500; display:block; margin-bottom:7px;';
+  let body = '';
+  if (st==='active') {
+    body = `<div class="field-box active"><span class="mono" style="font-size:13px;">${f.value}</span><span class="caret"></span></div>`;
+  } else if (st==='pending') {
+    body = `<div class="field-box pending${f.wide?' pending-wide':''}"><span class="mono" style="font-size:12.5px; color:var(--placeholder);">waiting…</span></div>`;
+  } else if (isInf) {
+    body = `<div class="field-box"><span class="mono" style="font-size:12.5px; color:var(--mono-body); line-height:1.55;">${f.value}</span></div>
+      <div class="chip-inferred"><span class="dot"></span>Inferred — review</div>`;
+  } else if (isDraft) {
+    body = `<textarea id="af-draft" class="mono" style="width:100%; border:1px solid var(--amber-panel-border); border-radius:10px; padding:12px; background:var(--amber-panel); font-size:12.5px; color:var(--mono-body); line-height:1.55; min-height:92px; resize:vertical;">${f.value}</textarea>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-top:8px;">
+        <span class="chip-draft"><span class="dot"></span>Draft — tailored to this event</span>
+        <span style="display:flex; gap:14px;"><button class="btn-ghost" style="color:var(--teal-fill); font-weight:600; font-size:12.5px;" onclick="App.regenerate()">Regenerate</button><button class="btn-ghost" style="color:var(--teal-fill); font-weight:600; font-size:12.5px;" onclick="App.shorten()">Shorter</button></span>
+      </div>`;
+  } else {
+    const chip = (f.source==='profile'||f.source==='default') ? `<span class="chip-src">${f.source}</span>` : '';
+    body = `<div class="field-box"><span class="val">${f.value}</span>${ICONS.check}</div>${chip}`;
   }
-  updateDebug();
+  return `<div${cell}><label style="${labelStyle}">${f.label}</label>${body}</div>`;
 }
-
-function fillField(key) {
-  const f = AUTOFILL_FIELDS.find(x => x.key === key);
-  if (!f) return;
-  fieldStates[key].filled = true;
-  fieldStates[key].value = f.draftText || f.value;
-  addLog(`filling · ${f.label}`, true);
-  setTimeout(() => addLog(`filled · ${f.label}`, false), 200);
-  renderAutofillFields();
-}
-
-function prefillProfileFields() {
-  AUTOFILL_FIELDS.filter(f => f.key !== 'team_status').forEach(f => {
-    fieldStates[f.key].filled = true;
-    fieldStates[f.key].value = f.draftText || f.value;
-  });
-}
-
-function prefillAllFields() {
-  AUTOFILL_FIELDS.forEach(f => {
-    fieldStates[f.key].filled = true;
-    fieldStates[f.key].value = f.inferredValue || f.draftText || f.value;
-  });
-}
-
-function provideTeamStatus() {
-  manualOverride = true;
-  clearAutoTimers();
-  const val = document.getElementById('team-status-input').value;
-  fieldStates.team_status.filled = true;
-  fieldStates.team_status.value = val;
-  addLog(`filled · Team status (user provided)`, false);
-  setAutofillState('awaiting_approval');
-}
-
-function resumeAutofill() {
-  if (autofillState === 'captcha_encountered' || autofillState === 'oauth_redirect') {
-    setAutofillState('awaiting_approval');
+function agentLog(af) {
+  const sel = currentSel();
+  const line = (time, body) => `<div><span style="color:var(--placeholder); margin-right:8px;">${time}</span>${body}</div>`;
+  const tag = (t,c) => `<span style="color:${c}; margin-right:6px;">${t}</span>`;
+  const plain = (t) => `<span style="color:var(--mono-body);">${t}</span>`;
+  const status = (t) => `<span style="color:var(--teal-fill); font-weight:500;">${t}</span>`;
+  let log = [
+    line('14:02:58', plain('Opened ' + sel.title + ' registration')),
+    line('14:03:00', plain('Reading form · 8 fields detected')),
+    line('14:03:01', plain('Matched 5 fields from your profile')),
+    line('14:03:03', tag('profile','#3A6B59') + plain('Full name → Maya Chen')),
+    line('14:03:04', tag('profile','#3A6B59') + plain('Email → maya.chen@berkeley.edu')),
+    line('14:03:05', tag('profile','#3A6B59') + plain('GitHub → github.com/mayac')),
+    line('14:03:06', tag('profile','#3A6B59') + plain('School · Graduation')),
+    line('14:03:07', tag('default','#6B6560') + plain('T-shirt size → M')),
+  ];
+  if (af==='filling') log.push(line('14:03:09', plain('Inferring team status…') + '<span class="caret" style="height:13px; vertical-align:middle;"></span>'));
+  if (af==='captcha') log.push(line('14:03:10', tag('Paused','#B5740E') + plain('CAPTCHA challenge — needs you in-browser')));
+  if (af==='oauth') log.push(line('14:03:10', tag('Paused','#B5740E') + plain('Sign-in required — Google OAuth in-browser')));
+  if (af==='needsinput') log.push(line('14:03:11', tag('Paused','#B5740E') + plain("Can't infer: team status — needs your input")));
+  if (af==='awaiting'||af==='submitting'||af==='success') {
+    log.push(line('14:03:12', tag('inferred','#B5740E') + plain('Team status → Looking for teammates')));
+    log.push(line('14:03:13', tag('draft','#B5740E') + plain('"Why join?" drafted in your voice')));
+    log.push(line('14:03:13', plain('All fields complete · 2 to review')));
   }
+  if (af==='awaiting') log.push(line('14:03:14', status('awaiting approval')));
+  if (af==='submitting') log.push(line('14:03:15', status('Submitting registration…')));
+  if (af==='success') log.push(line('14:03:17', tag('Submitted','#0F6E56') + plain('Confirmation LUM-8K2F9Q')));
+  return log.join('');
 }
-
-function confirmSubmit() {
-  document.getElementById('af-confirm-btn').textContent = 'Confirm & submit';
-  setAutofillState('submitting');
+function afStatusPill(af) {
+  const label = af==='filling'?'auto-registering':af==='needsinput'?'needs your input':(af==='captcha'||af==='oauth')?'paused — action needed':af==='awaiting'?'awaiting your review':af==='submitting'?'submitting':'';
+  if (!label) return '';
+  let inner = '';
+  if (af==='filling'||af==='submitting') inner = SPINNER();
+  else if (af==='needsinput'||af==='captcha'||af==='oauth') inner = `<span style="width:7px;height:7px;border-radius:50%;background:var(--amber-dot);display:inline-block;"></span>`;
+  else if (af==='awaiting') inner = `<span style="width:7px;height:7px;border-radius:50%;background:var(--teal-fill);display:inline-block;"></span>`;
+  return `<span style="display:inline-flex; align-items:center; gap:8px; background:var(--teal-tint); color:var(--teal-fill); font-size:13px; font-weight:500; padding:6px 13px; border-radius:999px; margin-left:6px;">${inner}${label}</span>`;
 }
-
-function initAgentLog() {
-  document.getElementById('af-agent-log').innerHTML = `
-    <div class="step done">reading form structure...</div>
-    <div class="step done">found 6 fields</div>
-    <div class="step done">matching to your profile...</div>`;
-}
-
-function addLog(msg, active) {
-  const log = document.getElementById('af-agent-log');
-  log.querySelectorAll('.step.active').forEach(s => { s.classList.remove('active'); s.classList.add('done'); });
-  const div = document.createElement('div');
-  div.className = 'step' + (active ? ' active' : ' done');
-  div.textContent = msg;
-  log.appendChild(div);
-}
-
-function sourceChip(source) {
-  if (source === 'profile') return '<span class="source-chip">profile</span>';
-  if (source === 'default') return '<span class="source-chip default">default</span>';
-  if (source === 'llm_inferred') return '<span class="source-chip inferred">Inferred — review</span>';
-  if (source === 'llm_draft') return '<span class="source-chip draft">Draft — tailored to this event</span>';
+function afFooter(af) {
+  const locked = `<button class="btn" disabled style="padding:11px 24px; font-size:14.5px;">Confirm &amp; submit</button>`;
+  if (af==='filling') return `<span style="display:inline-flex; align-items:center; gap:8px; font-size:13.5px; color:var(--faint);">${ICONS.lock}Nothing is submitted until you confirm</span>${locked}`;
+  if (af==='needsinput') return `<span style="display:inline-flex; align-items:center; gap:8px; font-size:13.5px; color:var(--amber-text); font-weight:500;"><span style="width:7px;height:7px;border-radius:50%;background:var(--amber-dot);"></span>Paused — one answer needed below</span>${locked}`;
+  if (af==='captcha'||af==='oauth') return `<span style="display:inline-flex; align-items:center; gap:8px; font-size:13.5px; color:var(--amber-text); font-weight:500;"><span style="width:7px;height:7px;border-radius:50%;background:var(--amber-dot);"></span>Paused — finish the step above, then Resume</span>${locked}`;
+  if (af==='awaiting') return `<span style="display:inline-flex; align-items:center; gap:8px; font-size:13.5px; color:var(--teal-fill); font-weight:500;">${ICONS.shield}Ready — review, then confirm</span>
+    <div style="display:flex; align-items:center; gap:16px;"><button class="btn-ghost" onclick="App.go('feed')">Cancel</button><button class="btn btn-primary" style="padding:11px 24px; font-size:14.5px;" onclick="App.confirmSubmit()">Confirm &amp; submit</button></div>`;
+  if (af==='submitting') return `<span style="display:inline-flex; align-items:center; gap:8px; font-size:13.5px; color:var(--teal-fill); font-weight:500;">${SPINNER(13)}Submitting your registration…</span><button class="btn btn-primary" disabled style="opacity:.55; padding:11px 24px; font-size:14.5px;">Submitting…</button>`;
   return '';
 }
+function renderAutofill() {
+  const af = state.afStep; const sel = currentSel();
+  const isForm = ['filling','needsinput','awaiting','submitting','captcha','oauth'].includes(af);
+  const demo = `<div class="demo-bar"><span class="lbl">DEMO STATES</span>${AF_STEPS.map(([k,l])=>`<button class="demo-chip${af===k?' active':''}" onclick="App.setAfStep('${k}')">${l}</button>`).join('')}</div>`;
 
-function renderAutofillFields(allDone) {
-  const container = document.getElementById('af-fields');
-  const showAll = allDone || autofillState === 'awaiting_approval' || autofillState === 'needs_input';
-  container.innerHTML = AUTOFILL_FIELDS.map(f => {
-    const st = fieldStates[f.key];
-    const done = showAll ? st.filled || allDone : st.filled;
-    const val = st.value || (done ? (f.inferredValue || f.draftText || f.value) : '');
-    const isDraft = f.source === 'llm_draft' && autofillState === 'awaiting_approval';
-    const isNeedsInput = f.key === 'team_status' && autofillState === 'needs_input';
-    if (isNeedsInput) return '';
-    let valueHtml;
-    if (isDraft) {
-      valueHtml = `<textarea class="draft-textarea" id="draft-textarea">${f.draftText}</textarea>
-        <div class="draft-actions"><button class="link">Regenerate</button><span style="color:var(--border)">·</span><button class="link">Shorter</button></div>`;
-    } else {
-      valueHtml = `<div class="value ${done ? '' : 'empty'}">${done ? val : '...'}</div>`;
-    }
-    const showChip = done && f.source;
-    const chip = showChip ? sourceChip(f.key === 'team_status' && autofillState === 'awaiting_approval' ? 'llm_inferred' : f.source) : '';
-    return `<div class="form-field ${done ? 'done' : ''}"><label>${f.label}</label>${valueHtml}${chip}<span class="check">✓</span></div>`;
-  }).join('');
-}
-
-function initDebug() {
-  const screensEl = document.getElementById('debug-screens');
-  screensEl.innerHTML = SCREENS.map(s => `<button class="debug-btn" data-screen="${s}" onclick="debugGoScreen('${s}')">${s}</button>`).join('');
-  const statesEl = document.getElementById('debug-states');
-  statesEl.innerHTML = AF_STATES.map(s => `<button class="debug-btn" data-af="${s}" onclick="debugGoAutofill('${s}')">${s}</button>`).join('');
-}
-
-function debugGoScreen(s) {
-  if (['discover','saved','registrations','notifications','profile','settings'].includes(s)) {
-    document.getElementById('app-shell').classList.remove('hidden');
-    goTo(s);
-  } else {
-    document.getElementById('app-shell').classList.add('hidden');
-    document.querySelectorAll('.screen').forEach(x => x.classList.remove('active'));
-    document.getElementById('screen-' + s).classList.add('active');
-    currentScreen = s;
+  let body = '';
+  if (isForm) {
+    let callout = '';
+    if (af==='needsinput') callout = `<div class="callout"><div class="callout-eyebrow"><span class="dot"></span>NEEDS YOUR INPUT</div>
+      <div style="font-size:14.5px; font-weight:600; margin-top:9px;">This form asks for <span style="color:var(--amber-text);">Team status</span> — we don't have it yet.</div>
+      <div style="display:flex; gap:10px; margin-top:13px;"><input class="input" style="flex:1; background:#fff; border-radius:10px; padding:10px 12px;" placeholder="e.g. Looking for teammates"><button class="btn btn-primary" style="padding:10px 18px; border-radius:10px; font-size:14px; white-space:nowrap;" onclick="App.submitNeedsInput()">Provide &amp; resume</button></div></div>`;
+    if (af==='captcha') callout = `<div class="callout"><div class="callout-eyebrow"><span class="dot"></span>ACTION NEEDED IN YOUR BROWSER</div>
+      <div style="font-size:14.5px; font-weight:600; margin-top:9px;">Complete the CAPTCHA in your browser, then click Resume.</div>
+      <div style="font-size:13px; color:var(--muted); margin-top:6px; line-height:1.5;">We paused so a human can clear the challenge — the agent won't fake it.</div>
+      <button class="btn btn-outline" style="margin-top:13px; padding:9px 18px; border-radius:10px;" onclick="App.resume()">Resume</button></div>`;
+    if (af==='oauth') callout = `<div class="callout"><div class="callout-eyebrow"><span class="dot"></span>SIGN-IN REQUIRED</div>
+      <div style="font-size:14.5px; font-weight:600; margin-top:9px;">Sign in to Google in your browser, then click Resume.</div>
+      <div style="font-size:13px; color:var(--muted); margin-top:6px; line-height:1.5;">The form uses Google sign-in — we hand control to you, then pick back up.</div>
+      <button class="btn btn-outline" style="margin-top:13px; padding:9px 18px; border-radius:10px;" onclick="App.resume()">Resume</button></div>`;
+    const fields = fieldDefs().map(f=>renderField(f, af)).join('');
+    body = `<div style="flex:1; overflow:auto; display:flex; flex-direction:column;">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 28px; background:#fff; border-bottom:1px solid var(--border-lt);">
+        <div><span style="font-weight:600; font-size:16px;">${sel.title}</span><span style="font-size:14px; color:var(--muted); margin-left:8px;">${sel.place}</span></div>
+        <span class="mono" style="font-size:13.5px; color:var(--faint);">${sel.deadline} left to register</span>
+      </div>
+      <div style="flex:1; display:grid; grid-template-columns:58% 42%; max-width:1180px; width:100%; margin:0 auto;">
+        <div style="padding:26px 30px; border-right:1px solid var(--border-lt2);">
+          <div class="section-label" style="margin-bottom:18px;">REGISTRATION FORM</div>
+          ${callout}
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">${fields}</div>
+        </div>
+        <div style="padding:26px 30px; background:var(--panel);">
+          <div class="section-label" style="margin-bottom:18px;">AGENT ACTIVITY</div>
+          <div class="mono" style="display:flex; flex-direction:column; gap:11px; font-size:12.5px; line-height:1.45;">${agentLog(af)}</div>
+        </div>
+      </div>
+      <div style="background:#fff; border-top:1px solid var(--border-lt2);"><div style="max-width:1180px; margin:0 auto; padding:18px 30px; display:flex; align-items:center; justify-content:space-between;">${afFooter(af)}</div></div>
+    </div>`;
+  } else if (af==='success') {
+    const nm = ['ethbangkok','calhacks'].map(evById);
+    body = `<div style="flex:1; overflow:auto; display:flex; align-items:flex-start; justify-content:center; padding:40px 24px;">
+      <div class="card" style="width:460px; border-radius:18px; overflow:hidden;">
+        <div style="background:var(--amber-bg); padding:36px 28px 32px; text-align:center; animation:fadeup .5s ease-out;">
+          ${bird(46,'#C97B14')}
+          <div style="font-weight:700; font-size:25px; letter-spacing:-0.02em; color:var(--amber-head); margin-top:8px;">You're in. Worm secured.</div>
+          <div style="font-size:15px; color:var(--amber-sub); margin-top:8px;">${sel.title} · ${sel.place}</div>
+          <div class="mono" style="display:inline-block; margin-top:16px; font-size:14px; letter-spacing:0.08em; color:var(--amber-head); background:#F7E2C4; border:1px solid #ECCF9E; border-radius:9px; padding:8px 16px;">LUM-8K2F9Q</div>
+        </div>
+        <div style="padding:22px 24px;">
+          <div style="display:flex; flex-direction:column; gap:13px;">
+            <div style="display:flex; justify-content:space-between; font-size:14px;"><span style="color:var(--faint);">When</span><span style="font-weight:500;">${sel.dates}</span></div>
+            <div style="display:flex; justify-content:space-between; font-size:14px;"><span style="color:var(--faint);">Where</span><span style="font-weight:500;">${sel.place}</span></div>
+            <div style="display:flex; justify-content:space-between; font-size:14px;"><span style="color:var(--faint);">Confirmation</span><span style="font-weight:500;">sent to your email</span></div>
+          </div>
+          <div style="display:flex; gap:10px; margin-top:20px;">
+            <button class="btn btn-primary" style="flex:1; padding:12px;">Add to calendar</button>
+            <button class="btn btn-outline" style="flex:1; padding:12px; justify-content:center;" onclick="App.go('registrations')">View registrations</button>
+          </div>
+        </div>
+        <div style="border-top:1px solid var(--border-lt); padding:18px 24px;">
+          <div style="font-size:12px; color:#A39E97; font-weight:500; letter-spacing:0.02em; margin-bottom:13px;">NEXT MATCHES</div>
+          <div style="display:flex; flex-direction:column; gap:13px;">
+            ${nm.map(e=>`<div style="display:flex; align-items:center; justify-content:space-between;"><div><div style="font-size:14px; font-weight:500;">${e.title}</div><div class="mono" style="font-size:11.5px; color:#A39E97; margin-top:2px;">${e.deadline}</div></div><button class="btn btn-outline btn-sm" onclick="App.startAutofill('${e.id}')">Register</button></div>`).join('')}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  } else if (af==='failed') {
+    body = `<div style="flex:1; overflow:auto; display:flex; align-items:flex-start; justify-content:center; padding:40px 24px;">
+      <div class="card" style="width:440px; border-radius:18px; padding:32px 30px; text-align:center;">
+        <div style="width:54px; height:54px; border-radius:50%; background:var(--red-bg); display:flex; align-items:center; justify-content:center; margin:0 auto;"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#C2503E" stroke-width="2.2" stroke-linecap="round"><path d="M12 8v5"></path><circle cx="12" cy="16.5" r="0.4" fill="#C2503E"></circle><path d="M12 3l9 16H3z" stroke-linejoin="round"></path></svg></div>
+        <div style="font-weight:700; font-size:20px; letter-spacing:-0.01em; margin-top:16px;">Couldn't submit — site rejected it.</div>
+        <div style="font-size:14px; color:var(--muted); margin-top:8px; line-height:1.5;">${sel.title}'s form returned an error on submit. Your answers are saved — nothing was lost.</div>
+        <div class="mono" style="font-size:12px; color:var(--red-text); background:var(--red-bg); border-radius:9px; padding:10px 12px; margin-top:16px; line-height:1.5;">ERR 422 · field "phone" required but not in profile</div>
+        <div style="display:flex; gap:10px; margin-top:20px;"><button class="btn btn-neutral" style="flex:1; padding:12px; justify-content:center;" onclick="App.go('registrations')">Back to registrations</button><button class="btn btn-primary" style="flex:1; padding:12px;" onclick="App.retry()">Retry</button></div>
+      </div>
+    </div>`;
   }
-  updateDebug();
+
+  return `<div style="height:100vh; background:var(--bg); display:flex; flex-direction:column; position:relative;">
+    <div style="background:#fff; border-bottom:1px solid var(--border-lt2); padding:16px 28px; display:flex; align-items:center; justify-content:space-between;">
+      <div style="display:flex; align-items:center; gap:11px;">${bird(22)}<span style="font-weight:700; font-size:16px;">EarlyBirds</span>${afStatusPill(af)}</div>
+      <button class="btn-ghost" onclick="App.go('feed')">✕ Close</button>
+    </div>
+    ${body}
+    ${demo}
+  </div>`;
 }
 
-function debugGoAutofill(s) {
-  clearAutoTimers();
-  openAutofill(s, true);
+/* ============================== ROOT RENDER ============================== */
+function render() {
+  const r = state.route;
+  let html;
+  if (r==='auth') html = renderAuth();
+  else if (r==='onboard') html = renderOnboard();
+  else if (r==='basics') html = renderBasics();
+  else if (r==='voice') html = renderVoice();
+  else if (r==='autofill') html = renderAutofill();
+  else if (r==='feed') html = renderFeed();
+  else if (r==='saved') html = renderSaved();
+  else if (r==='event') html = renderEvent();
+  else if (r==='registrations') html = renderRegistrations();
+  else if (r==='notifications') html = renderNotifications();
+  else if (r==='profile') html = renderProfile();
+  else if (r==='settings') html = renderSettings();
+  else html = renderFeed();
+  document.getElementById('app').innerHTML = html;
 }
-
-function updateDebug() {
-  document.querySelectorAll('#debug-screens .debug-btn').forEach(b => b.classList.toggle('active', b.dataset.screen === currentScreen));
-  document.querySelectorAll('#debug-states .debug-btn').forEach(b => b.classList.toggle('active', b.dataset.af === autofillState));
-}
-
-init();
+render();
 </script>
 </body>
 </html>

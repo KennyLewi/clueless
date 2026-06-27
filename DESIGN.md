@@ -205,7 +205,7 @@ interface UserProfile {
   // Answers we can reuse to auto-fill forms.
   formAnswers: Record<string, string>;  // keyed by canonical field name
   // Voice onboarding (§6.3.4) — for drafts + ranking; past work ≠ future topic.
-  promptAnswers: Record<string, string>;  // Hinge prompt ids → answers
+  promptAnswers: Record<string, string>;  // voice-onboarding prompt ids → answers (§6.3.4)
   writingSamples: { text: string; purpose: "voice" }[];
   exploreOutsideLane?: string;          // optional branching prompt (§6.3.4)
 }
@@ -636,44 +636,60 @@ only; no open-ended chat thread.
 
 #### Type
 
-- **UI / interface / wordmark:** Hanken Grotesk (weights 400, 500)
-- **Agent activity, field values, system status, countdowns, confirmation codes:** IBM Plex Mono
-  (weights 400, 500)
-- **Core rule:** anything the **human** reads is Hanken; anything the **agent** produces is mono.
-  This human/machine type contrast is intentional and load-bearing — do not blur it.
+- **UI / interface / wordmark / headlines:** Hanken Grotesk (weights 400, 500, 600, 700 — 600/700
+  carry headlines and the wordmark)
+- **Agent activity, field values, system status, countdowns, confirmation codes, eyebrow/section
+  labels:** IBM Plex Mono (weights 400, 500)
+- **Core rule:** anything the **human** reads is Hanken; anything the **agent** produces — plus
+  system/eyebrow labels — is mono. This human/machine type contrast is intentional and load-bearing
+  — do not blur it.
 
 Google Fonts import:
 
 ```css
-@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 ```
 
 #### Color
 
-| Token | Hex | Use |
+Light mode only for v1. A warm-neutral canvas, **one teal action color**, **amber reserved for the
+win + review flags**, and **red for failure only**.
+
+| Group | Hex | Use |
 |---|---|---|
-| Accent (primary actions, checks, active states) | `#1D9E75` | Confirm buttons, field-complete checks, "ready" shield |
-| Accent dark (button fills, logo mark) | `#0F6E56` | Filled buttons, bird mark |
-| Accent tint (pills, light fills) | `#E1F5EE` | Status pills, subtle highlights |
-| Success / "registered" **only** | fill `#FBEEDB`, text `#7A4A06`, mark `#C97B14` | Sunrise amber — hero block on `succeeded` (§6.3.2) |
-| Everything else | Neutral grays / system defaults | Backgrounds, borders, body text |
+| **Text** | `#1A1714` primary · `#3F3A35` mono body · `#6B6560` muted · `#8A847D` / `#97918A` faint · `#B7B2AB` placeholder | headings, body, agent values, labels, empty/pending |
+| **Surfaces** | `#FFFFFF` cards · `#FBFAF8` warm panels · `#F6F4F1` app background | cards, filled fields / agent column, canvas |
+| **Borders** | `#E9E5DF` default · `#F0ECE6` / `#ECE8E2` lighter · `#E2DED7` inputs | cards, inner dividers, input outlines |
+| **Teal — every action** | `#0F6E56` fill/primary · `#1D9E75` outlines, checks, active field, "ready" shield | filled & outline buttons, bird mark, field-complete checks |
+| Teal tints | `#E6F4EE` / `#EAF4EF` / `#EDF5F1` · text `#3A6B59` | pills, active nav, reason pills |
+| **Amber — win + flags only** | hero bg `#FBEEDB` · mark `#C97B14` · headline `#7A4A06` · subhead `#9A6A1E` | sunrise success hero (§6.3.2) |
+| Amber flag | text `#B5740E` · dot `#D9920F` | "Inferred — review" / "Draft …" chips, needs-input / captcha / oauth callouts, Awaiting / Needs-you / Paused pills |
+| **Red — failure only** | dot/icon `#C2503E` · text `#9A3B2E` · bg `#F7E9E6` | `failed` card mark + error code; destructive Delete |
 
 No gradients anywhere.
 
 #### Rules
 
-- **Amber appears exactly once** in the entire flow: the instant registration succeeds. Never
-  earlier — not on "ready to review." Reserving it is what gives it impact.
-- **One accent per screen.** If a screen seems to need a second color, it's probably the success
-  state — otherwise reconsider.
-- **Logo:** geometric bird **mark**, never a mascot with a face. Must read at 16px.
+- **Radii & elevation:** 9–11px on buttons/inputs, 14–18px on cards; 1px borders; shadows no heavier
+  than `0 2px 10px rgba(0,0,0,.04)`.
+- **Teal = every action.** Filled `#0F6E56` for primary, `#1D9E75` outline for secondary. **No amber
+  on action buttons, ever.**
+- **Amber = the win + review flags only.** The sunrise hero on `succeeded`, plus attention flags: the
+  `llm_inferred` **"Inferred — review"** and `llm_draft` **"Draft — tailored to this event"** chips,
+  the inline **needs-input / captcha / oauth** callouts, and the **Awaiting approval / Needs your
+  input / Paused — action needed** status pills. Amber carries emotion; teal carries control — they
+  **never compete in the same hero**.
+- **Red = failure status only** (restrained): the `failed` card mark/code and destructive Delete.
+- **Logo:** geometric bird **mark**, never a mascot with a face; must read at 16px —
+  `<path d="M4 18 L14 6 L14 11 L24 18">` stroked, no fill.
 - **Countdown numerals:** IBM Plex Mono so digits don't jitter as they tick (see §6.3.1 event context).
 - **Motion:** reserved for moments that matter (autofill reveal; success beat) — never decoration.
-  Success animation plays **once**, never loops.
-- **Copy:** carries the "early bird" personality on the success moment only (e.g. "You're in. Worm
-  secured."). Stay calm elsewhere — no cheerleading during fill or review.
-- **`llm_inferred` at review:** small amber **text** chip on the field row during `awaiting_approval`
-  only — distinct from the sunrise hero amber block (§6.3.2).
+  The only idle motion is the header status spinner while the agent works; the success bird flies in
+  **once**, never loops.
+- **Copy:** the "early bird" personality lands on the success moment only ("You're in. Worm
+  secured."). Stay calm elsewhere — no cheerleading during fill or review. No emoji.
+- **`llm_inferred` / `llm_draft` at review:** small amber **text** chips on the field row during
+  `awaiting_approval` only — distinct from the sunrise hero amber block (§6.3.2).
 
 ### 6.3 Key screens
 
@@ -699,24 +715,36 @@ spinner in the header status pill.
 
 **Layout (top → bottom):**
 
-1. **App header** — bird mark + wordmark (Hanken), status pill (accent tint)
-2. **Event context** — event name + location (Hanken); registration deadline countdown (mono)
-3. **Two columns**
+1. **App header** — bird mark + wordmark (Hanken) + a status pill whose copy tracks the run —
+   *auto-registering* (spinner) · *needs your input* · *paused — action needed* · *awaiting your
+   review* · *submitting* — and a **✕ Close** at the right
+2. **Event context** — event name + location (Hanken); registration deadline countdown (mono,
+   "{deadline} left to register")
+3. **Two columns** (≈58% / 42%)
    - **Left — registration form (form mirror):** in-app mirror fed by SSE + `plannedActions` — not a
-     raw browser screenshot. Fields populate live as the agent fills; value text types in (mono);
-     each completed field gets a teal (`#1D9E75`) check. **Profile** and **structured** fields show
-     a mono source chip (`profile` / `default`). **Generative** (essay) fields show a **Draft —
-     tailored to this event** chip (amber text only, §6.2) and render as an editable textarea at
-     `awaiting_approval` — never a chat thread. Optional micro-actions on draft fields only:
-     **Regenerate** · **Shorter** (re-runs draft LLM with same anti-bias rules, §6.3.5).
-     **Simulang runs locally** (`earlybirds-desktop`) driving the user's Chrome beside the UI; form
-     mirror reflects what the agent typed. `RegistrationRun.artifacts` screenshots are debug/fallback only.
+     raw browser screenshot. Fields populate live in a two-column grid: a **done** field shows its
+     mono value + a teal (`#1D9E75`) check (plus a mono `profile` / `default` source chip), the
+     **active** field shows a teal border + blinking caret, and **pending** fields read `waiting…`.
+     **`llm_inferred`** fields show their value with an amber **"Inferred — review"** chip.
+     **Generative** (essay) fields show a **Draft — tailored to this event** chip (amber text only,
+     §6.2) and render as an editable textarea at `awaiting_approval` — never a chat thread. Optional
+     micro-actions on draft fields only: **Regenerate** · **Shorter** (re-runs draft LLM with same
+     anti-bias rules, §6.3.5). Pause states render as **inline amber callouts at the top of this
+     column** (never a modal): needs-input (input + **Provide & resume**), captcha, and oauth (each
+     with **Resume**) — the footer stays locked throughout. **Simulang runs locally**
+     (`earlybirds-desktop`) driving the user's Chrome beside the UI; form mirror reflects what the
+     agent typed. `RegistrationRun.artifacts` screenshots are debug/fallback only.
    - **Right — agent activity feed:** mono step log driven by `RegistrationProgressEvent` (§4),
-     Perplexity-style — e.g. "reading form structure → found N fields → matching to your profile →
-     filling · {field}"
+     Perplexity-style with timestamps + source tags — e.g. "Reading form · N fields detected →
+     `profile` Full name → … → Inferring team status… → `draft` 'Why join?' drafted in your voice →
+     awaiting approval"
 4. **Footer — confirm gate** — locked/dimmed **Confirm & submit** until fill completes; footer note
-   flips from lock icon + "Nothing is submitted until you confirm" → teal shield-check + "Ready —
-   review, then confirm"
+   flips from lock icon + "Nothing is submitted until you confirm" (and amber "Paused — …" while
+   waiting) → teal shield-check + "Ready — review, then confirm" with **Cancel** + the active
+   **Confirm & submit**
+
+*Prototype only:* a pinned **DEMO STATES** picker lets reviewers jump between all eight states; it's
+removed in the real build (state comes from the agent session).
 
 **Behavior (maps to `RegistrationRun.status`):**
 
@@ -738,7 +766,7 @@ They never overlap on this screen.
 1. **Celebratory hero** (sunrise amber block) — bird mark flies in **once** (non-looping); headline
    "You're in. Worm secured." (Hanken) + event name; mono confirmation code
 2. **Confirmation details card** (neutral) — when / where / confirmation email or status;
-   **Add to calendar** (teal) · **View confirmation**
+   **Add to calendar** (teal) · **View registrations**
 3. **Next matches strip** (quiet, neutral) — 1–2 upcoming hackathons with mono deadlines and
    understated Register buttons; rides momentum without competing with the celebration
 
@@ -752,38 +780,40 @@ Step A of onboarding — factual fields only; voice prompts are Step B (§6.3.4)
 
 **Layout:**
 - Headline (Hanken): "Fill once — EarlyBirds reuses these on every form."
-- Completeness meter (e.g. "4 of 6 fields")
-- Canonical field list mapped to `UserProfile.formAnswers`: name, email, school, skills, GitHub, etc.
+- Completeness meter (e.g. "4 of 5 fields")
+- Canonical field list mapped to `UserProfile.formAnswers`: name, email, school, GitHub, skills, etc.
 - Values the user enters display in Hanken; saved keys shown in mono in a subtle sidebar if helpful
 - Primary CTA: **Continue** (teal) → §6.3.4. Secondary: skip for now (returns to feed; generative
   drafts and stretch ranking degraded until voice step complete)
 
 Incomplete profile gates Register with inline prompt linking here.
 
-#### 6.3.4 Your voice (Step B — Hinge-style prompts)
+#### 6.3.4 Your voice (Step B — single scrolling prompt page)
 
-Card-stack onboarding for **how they write** and **what they want next** — not a domain lock-in.
-Optional collapsed paste at bottom for users who already have essay drafts.
+A single **scrollable page** of prompt cards (not a card stack) for **how they write** and **what
+they want next** — not a domain lock-in. Eyebrow "STEP 3 OF 3 · YOUR VOICE", headline "Tell us how
+you think." Every field is optional; a **sticky footer** (Back · Skip voice step · Save & find
+hackathons) stays pinned as the user scrolls.
 
-**Core prompts (3 cards, swipe or tap through):**
+**Prompt cards (top → bottom, one scrolling column):**
 
 | Prompt id | Question (Hanken) | Input | Stored as |
 |---|---|---|---|
 | `interests_next` | What do you want to hack on next? | Chip multi-select + "Something new to me" | `interests[]` + `promptAnswers.interests_next` |
 | `one_liner` | One line about you | Short text | `formAnswers.bio` + `promptAnswers.one_liner` |
-| `proud_project` | Something you've built that represents how you work | Voice or text (≥1 sentence) | `writingSamples[]` (`purpose: "voice"`) + `promptAnswers.proud_project` |
+| `proud_project` | Something you've built that represents how you work | Textarea — "we learn your voice from this, not your topic" | `writingSamples[]` (`purpose: "voice"`) + `promptAnswers.proud_project` |
+| `explore_outside_lane` *(optional)* | What would you try outside your usual lane? | Short text | `exploreOutsideLane` + `promptAnswers.explore_outside_lane` |
 
-**Optional 4th card:**
+`explore_outside_lane` feeds the ranking exploration boost (§5.3) — surfaces stretch matches with
+honest reason copy.
 
-| `explore_outside_lane` | What would you try outside your usual lane? | Short text | `exploreOutsideLane` + `promptAnswers.explore_outside_lane` |
+**Emphasized paste card (strongest signal):** a teal-accented "Paste an essay or write-up you're
+proud of" card with a **best signal** badge, a large textarea, and a mono word-count hint
+("0 words · aim for 150+"). Pasted prose is the highest-quality voice sample — it appends to
+`writingSamples` and is still **not required** for registration.
 
-Feeds ranking exploration boost (§5.3) — surfaces stretch matches with honest reason copy.
-
-**Optional paste (collapsed):** "Already have a bio or project write-up?" → textarea appends to
-`writingSamples` — boosts draft quality, **not required** for registration.
-
-**UX:** Perplexity/Hinge calm — one question per card, progress dots, no mascot. Primary CTA on
-last card: **Save & find hackathons** (teal). Skip voice step allowed (same degradation as §6.3.3).
+**UX:** calm, generous whitespace, no mascot, no swiping — the user scrolls the prompts and saves.
+Primary CTA: **Save & find hackathons** (teal). Skip voice step allowed (same degradation as §6.3.3).
 
 #### 6.3.5 Field fill tiers & draft generation policy
 
@@ -809,8 +839,9 @@ Every mapped form field gets a **fill tier** (`FormFieldSpec.fillTier` → drive
 5. **Human gate.** All `llm_draft` values appear in the form mirror at `awaiting_approval` as
    editable text — user confirms or edits before submit. No registration chatbot (§6.1).
 
-**Inference vs draft:** Short factual gaps (e.g. t-shirt size unset) may use `llm_inferred` with
-review flag; long prose always uses `llm_draft` + **Draft — tailored to this event** chip.
+**Inference vs draft:** Short factual gaps (e.g. team status, a missing t-shirt size) may use
+`llm_inferred` with review flag; long prose always uses `llm_draft` + **Draft — tailored to this
+event** chip.
 
 ### 6.4 UI state matrix
 
@@ -827,7 +858,7 @@ Frontend states the UI must handle. Copy follows §6.2 type/color rules.
 | `oauth_redirect` | "Sign in to **{provider}** in your browser, then click Resume." | Resume |
 | `awaiting_approval` | §6.3.1 footer: shield-check "Ready — review, then confirm"; Confirm unlocked; `llm_inferred` flagged (amber **text** chip); `llm_draft` fields show **Draft — tailored to this event** chip + editable textarea + Regenerate · Shorter | Confirm & submit · Cancel |
 | `submitting` | Confirm button spinner (teal) | — |
-| `succeeded` | §6.3.2 amber hero + details card + next matches | Add to calendar · Back to feed |
+| `succeeded` | §6.3.2 amber hero + details card + next matches | Add to calendar · View registrations |
 | `failed` | Last artifact screenshot + error stage (Hanken message, mono error code if any) | Open form manually · Retry |
 | `cancelled` | "Registration cancelled." | Back to event |
 

@@ -1,13 +1,13 @@
 # EarlyBirds clickable prototype
 
-Open [`index.html`](index.html) in a browser (720px+ width). No build step.
+Open [`index.html`](index.html) in a browser (720px+ width). No build step. Demo persona: **Maya Chen** (UC Berkeley).
 
 ## Demo flow
 
-1. Auth → Connect → Profile basics → Voice (Fintech selected) → Discover
-2. Register on **Fintech Forward Hackathon** — auto-advances `filling` → `needs_input` → `awaiting_approval`
-3. Use the **debug panel** (bottom-right) to jump to any screen or autofill state
-4. Registrations **Open** buttons deep-link into autofill states
+1. **Auth** → **Connect your sources** (Step 1/3) → **Profile basics** (Step 2/3) → **Your voice** (Step 3/3, Fintech preselected) → **Discover**
+2. **Auto-register** on **Fintech Forward** (the stretch match) — the takeover auto-advances `filling` → `needs_input`; **Provide & resume** → `awaiting_approval` → **Confirm & submit** → `submitting` → `success`
+3. Jump to any of the 8 autofill states with the **DEMO STATES** bar pinned to the bottom of the takeover; switch app screens from the left sidebar
+4. **Registrations** row actions (**Open** / **Review**) deep-link straight into the matching autofill state
 
 ## Verification vs DESIGN.md §6 (2026-06-27)
 
